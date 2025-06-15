@@ -1,0 +1,19 @@
+/* src/index.css */
+@import "tailwindcss";
+
+/* Opcional: Personalización con @theme y @layer */
+theme {
+  --color-primary: #3b82f6;
+  --color-secondary: #10b981;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-primary);
+    color: var(--color-secondary);
+  }
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 700;
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", // O "ESNext". ES2022 es un buen estándar moderno.
+    "module": "NodeNext", // Esto le dice a TypeScript que resuelva módulos como Node.js lo hace para ES Modules.
+    "moduleResolution": "NodeNext", // Es crucial para la resolución de módulos modernos.
+    "strict": true,
+    "esModuleInterop": true, // Importante para compatibilidad entre CommonJS y ES Modules
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./",
+    "lib": ["ES2022"], // Asegúrate de incluir librerías que soporten tus tipos de datos (como Date para fechas)
+    "types": ["node"] // Asegúrate de que los tipos de Node.js estén incluidos para `process.env`
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "dist"] // Excluye la carpeta de salida para evitar bucles de compilación
+}
