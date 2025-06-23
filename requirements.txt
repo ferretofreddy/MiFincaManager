@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn==0.22.0
+sqlalchemy==2.0.15
+asyncpg==0.28.0       # CAMBIADO: Versión de asyncpg que debería ser más compatible con Python 3.12
+passlib==1.7.4
+python-jose==3.3.0
+python-multipart==0.0.6
+python-dotenv==1.0.0
+alembic==1.11.1
+pydantic==2.5.0
+pydantic-settings>=2.0.0
