@@ -23,9 +23,15 @@ from .weighing import Weighing, WeighingCreate, WeighingUpdate, WeighingReduced
 from .feeding import Feeding, FeedingCreate, FeedingUpdate, FeedingReduced
 from .animal_feeding_pivot import AnimalFeedingPivot, AnimalFeedingPivotCreate, AnimalFeedingPivotReduced
 from .transaction import Transaction, TransactionCreate, TransactionUpdate, TransactionReduced
-from .batch import Batch, BatchCreate, BatchUpdate, BatchReduced # ¡Nuevo! Importa los schemas de Batch
-from .animal_batch_pivot import AnimalBatchPivot, AnimalBatchPivotCreate, AnimalBatchPivotReduced # ¡Nuevo! Importa los schemas de AnimalBatchPivot
-from .product import Product, ProductCreate, ProductUpdate, ProductReduced # ¡NUEVO! Importa los schemas de Product
+from .batch import Batch, BatchCreate, BatchUpdate, BatchReduced
+from .animal_batch_pivot import AnimalBatchPivot, AnimalBatchPivotCreate, AnimalBatchPivotReduced
+from .product import Product, ProductCreate, ProductUpdate, ProductReduced
+from .user_farm_access import UserFarmAccess, UserFarmAccessCreate, UserFarmAccessUpdate, UserFarmAccessReduced
+
 # Cuando crees otros schemas, impórtalos aquí también:
 # from .product import Product, ProductCreate, ProductUpdate, ProductReduced
 # ... y así sucesivamente para todos tus schemas.
+
+# Esquemas de seguridad y token
+from .token import Token, TokenPayload
+

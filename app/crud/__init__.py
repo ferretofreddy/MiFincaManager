@@ -24,9 +24,11 @@ from .weighings import weighing as weighing_crud
 from .feedings import feeding as feeding_crud
 from .animal_feeding_pivot import animal_feeding_pivot as animal_feeding_pivot_crud
 from .transactions import transaction as transaction_crud
-from .batches import batch as batch_crud # ¡Nuevo! Importa la instancia de CRUD para Batch
-from .animal_batch_pivot import animal_batch_pivot as animal_batch_pivot_crud # ¡Nuevo! Importa la instancia de CRUD para AnimalBatchPivot
-from .products import product as product_crud # ¡NUEVO! Importa la instancia de CRUD para Product
+from .batches import batch as batch_crud
+from .animal_batch_pivot import animal_batch_pivot as animal_batch_pivot_crud
+from .products import product as product_crud
+from .user_farm_access import user_farm_access
+
 
 # Cuando crees otros módulos CRUD, impórtalos aquí también:
 # from .products import product as product_crud

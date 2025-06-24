@@ -4,15 +4,15 @@ from datetime import datetime
 from sqlalchemy import Column, ForeignKey, DateTime, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped
-from sqlalchemy.schema import PrimaryKeyConstraint # Para definir claves primarias compuestas
-from typing import Optional
+from sqlalchemy.schema import PrimaryKeyConstraint
+from typing import Optional, ForwardRef
 
 # Importa Base de nuestro módulo app/db/base.py
-from app.db.base import Base # Usamos Base directamente para PrimaryKeyConstraint
+from app.db.base import Base
 
 # Importa los modelos relacionados directamente
-from .animal import Animal
-from .batch import Batch
+Animal = ForwardRef("Animal")
+Batch = ForwardRef("Batch")
 
 class AnimalBatchPivot(Base): # Hereda de Base directamente por la PK compuesta
     __tablename__ = "animal_batch_pivot"
@@ -29,5 +29,5 @@ class AnimalBatchPivot(Base): # Hereda de Base directamente por la PK compuesta
     __table_args__ = (PrimaryKeyConstraint("animal_id", "batch_event_id"),)
 
     # Relaciones
-    animal: Mapped["Animal"] = relationship("Animal", back_populates="batches_pivot")
-    batch_event: Mapped["Batch"] = relationship("Batch", back_populates="animal_batches")
+    animal: Mapped["Animal"] = relationship(Animal, back_populates="batches_pivot")
+    batch_event: Mapped["Batch"] = relationship(Batch, back_populates="animal_batches")

@@ -25,8 +25,12 @@ if config.config_file_name is not None:
 # from myapp import Base
 # target_metadata = Base.metadata
 # Importamos la base de datos y los modelos de tu aplicación
-from database import Base # Asegúrate de que esta importación sea correcta
-from models import * # Importar todos tus modelos para que Alembic los detecte
+# LA LÍNEA SIGUIENTE ES LA QUE NECESITA SER REEMPLAZADA O COMENTADA
+# from database import Base # Asegúrate de que esta importación sea correcta
+
+# ESTA ES LA IMPORTACIÓN CORRECTA PARA TU ESTRUCTURA ACTUAL
+from app.db.base import Base # Importa la Base desde la nueva ubicación
+from app.models import * # Importar todos tus modelos para que Alembic los detecte
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -97,4 +101,3 @@ if context.is_offline_mode():
 else:
     # Si estamos en modo online, ejecutamos la función asíncrona dentro de un bucle de eventos
     asyncio.run(run_migrations_online())
-

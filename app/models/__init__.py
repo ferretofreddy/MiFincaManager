@@ -28,9 +28,11 @@ from .weighing import Weighing
 from .feeding import Feeding
 from .animal_feeding_pivot import AnimalFeedingPivot
 from .transaction import Transaction
-from .batch import Batch # ¡Nuevo! Importa el modelo Batch
-from .animal_batch_pivot import AnimalBatchPivot # ¡Nuevo! Importa el modelo AnimalBatchPivot
+from .batch import Batch
+from .animal_batch_pivot import AnimalBatchPivot
 from app.models.product import Product
+from .user_farm_access import UserFarmAccess
+
 
 # Cuando crees otros modelos, impórtalos aquí también:
 # from .product import Product

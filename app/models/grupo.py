@@ -4,15 +4,18 @@ from datetime import datetime
 from sqlalchemy import Column, String, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped
-from typing import List, Optional
+from typing import List, Optional, ForwardRef # ¡AÑADE ForwardRef aquí!
 
 # Importa BaseModel de nuestro módulo app/db/base.py
 from app.db.base import BaseModel
 
 # Importa los modelos relacionados directamente
-from .user import User
-from .master_data import MasterData
+# from .user import User # <--- ¡COMENTA O ELIMINA ESTA LÍNEA AQUÍ!
+
 from .animal_group import AnimalGroup # ¡Nuevo! Importa el modelo AnimalGroup
+
+# Define ForwardRef para User
+User = ForwardRef("User") # <--- AÑADE ESTA LÍNEA
 
 class Grupo(BaseModel): # Hereda de BaseModel
     __tablename__ = "grupos"

@@ -4,17 +4,22 @@ from datetime import datetime
 from sqlalchemy import Column, String, Text, ForeignKey, Boolean, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped
-from typing import List, Optional
+from typing import List, Optional, ForwardRef
 
 # Importa BaseModel de nuestro módulo app/db/base.py
 from app.db.base import BaseModel
 
 # Importa los modelos relacionados directamente (solo para Mapped[List["..."]])
-from .user import User
-from .lot import Lot
-from .transaction import Transaction
-from .batch import Batch # ¡Nuevo! Importa el modelo Batch
-from .product import Product # ¡NUEVO! Importa el modelo Product
+# from .user import User # Si la relación Farm-User es directa, la importamos. Si es circular, ForwardRef.
+# Asumo que User se importa directamente en Farm sin circularidad con Farm
+
+# Define ForwardRef si es necesario (ej. para UserFarmAccess)
+User = ForwardRef("User") # Si Farm importa User en un ciclo
+Lot = ForwardRef("Lot")
+Transaction = ForwardRef("Transaction")
+Batch = ForwardRef("Batch")
+Product = ForwardRef("Product")
+UserFarmAccess = ForwardRef("UserFarmAccess") # ¡NUEVO FORWARDREF!
 
 class Farm(BaseModel): # Hereda de BaseModel
     __tablename__ = "farms"
