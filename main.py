@@ -1,24 +1,12 @@
 # main.py
 from fastapi import FastAPI
-from routers import (
-    users, 
-    farms, 
-    animals, 
-    master_data, 
-    lots, 
-    grupos,
-    animal_groups,
-    health_events, 
-    reproductive_events, 
-    weighings, 
-    feedings, 
-    transactions,
-    roles, # NUEVO: Importar el router de roles
-    permissions, # NUEVO: Importar el router de permisos
-    configuration_parameters, # NUEVO: Importar el router de parámetros de configuración
-    animal_locations_history # NUEVO: Importar el router de historial de ubicaciones
+from app.api.v1.endpoints import (
+    users, master_data, farms, animals, grupo, animal_group,
+    animal_location_history, health_event, reproductive_event,
+    offspring_born, weighing, feeding, transaction, batch,
+    products
 )
-from database import Base, engine, AsyncSessionLocal # Asegúrate de que AsyncSessionLocal esté aquí
+from database import Base, engine, AsyncSessionLocal
 from alembic.config import Config
 from alembic import command
 import os

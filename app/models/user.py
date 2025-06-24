@@ -21,7 +21,8 @@ from .offspring_born import OffspringBorn
 from .weighing import Weighing
 from .feeding import Feeding
 from .transaction import Transaction
-from .batch import Batch # ¡Nuevo! Importa el modelo Batch
+from .batch import Batch
+from .product import Product
 
 class User(BaseModel): # Hereda de BaseModel
     __tablename__ = "users"
@@ -61,10 +62,8 @@ class User(BaseModel): # Hereda de BaseModel
     weighings_recorded: Mapped[List["Weighing"]] = relationship("Weighing", back_populates="recorded_by_user")
     feedings_recorded: Mapped[List["Feeding"]] = relationship("Feeding", back_populates="recorded_by_user")
     transactions_recorded: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="recorded_by_user")
-
-    # ¡Nueva relación para Batch!
-    batches_created: Mapped[List["Batch"]] = relationship("Batch", back_populates="created_by_user") # ¡Actualizado!
-
+    batches_created: Mapped[List["Batch"]] = relationship("Batch", back_populates="created_by_user")
+    products_created: Mapped[List["Product"]] = relationship("Product", back_populates="created_by_user")
     grupos_created: Mapped[List["Grupo"]] = relationship("Grupo", back_populates="created_by_user")
     animal_groups_created: Mapped[List["AnimalGroup"]] = relationship("AnimalGroup", back_populates="created_by_user")
     animal_location_history_created: Mapped[List["AnimalLocationHistory"]] = relationship("AnimalLocationHistory", back_populates="created_by_user")

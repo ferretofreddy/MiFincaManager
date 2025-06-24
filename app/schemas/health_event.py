@@ -6,7 +6,7 @@ import uuid
 from decimal import Decimal # Importa Decimal
 
 # Importa los ENUMS
-from app_enums import HealthEventTypeEnumPython
+from app.enums import HealthEventTypeEnumPython
 
 # Importa los schemas reducidos de las entidades relacionadas
 from app.schemas.user import UserReduced

@@ -26,7 +26,7 @@ from .animal_feeding_pivot import animal_feeding_pivot as animal_feeding_pivot_c
 from .transactions import transaction as transaction_crud
 from .batches import batch as batch_crud # ¡Nuevo! Importa la instancia de CRUD para Batch
 from .animal_batch_pivot import animal_batch_pivot as animal_batch_pivot_crud # ¡Nuevo! Importa la instancia de CRUD para AnimalBatchPivot
-from .product import product
+from .products import product as product_crud # ¡NUEVO! Importa la instancia de CRUD para Product
 
 # Cuando crees otros módulos CRUD, impórtalos aquí también:
 # from .products import product as product_crud

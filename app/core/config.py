@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     DB_POOL_PRE_PING: bool = True   # Habilita el "pre-ping" para verificar la conexión antes de usarla
 
     # --- Configuración de Seguridad (JWT) ---
-    SECRET_KEY: str                 # Clave secreta para firmar los tokens JWT
+    SECRET_KEY: str = "MiFincaManager"  # Clave secreta para firmar los tokens JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 # Tiempo de expiración del token de acceso en minutos
     ALGORITHM: str = "HS256"        # Algoritmo de cifrado para JWT (ej. HS256, RS256)
 

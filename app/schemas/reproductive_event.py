@@ -5,7 +5,7 @@ from datetime import datetime, date
 import uuid
 
 # Importa los ENUMS
-from app_enums import ReproductiveEventTypeEnumPython, GestationDiagnosisResultEnumPython
+from app.enums import ReproductiveEventTypeEnumPython, GestationDiagnosisResultEnumPython
 
 # Importa los schemas reducidos de las entidades relacionadas
 from app.schemas.user import UserReduced

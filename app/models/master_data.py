@@ -15,7 +15,8 @@ from .animal import Animal
 from .health_event import HealthEvent
 from .feeding import Feeding
 from .transaction import Transaction
-from .batch import Batch # ¡Nuevo! Importa el modelo Batch
+from .batch import Batch
+from .product import Product
 
 class MasterData(BaseModel): # Hereda de BaseModel
     __tablename__ = "master_data"
@@ -40,7 +41,9 @@ class MasterData(BaseModel): # Hereda de BaseModel
     transactions_currency: Mapped[List["Transaction"]] = relationship("Transaction", foreign_keys="[Transaction.currency_id]", back_populates="currency")
 
     # ¡Nueva relación para Batch!
-    batches_batch_type: Mapped[List["Batch"]] = relationship("Batch", foreign_keys="[Batch.batch_type_id]", back_populates="batch_type") # ¡Actualizado!
+    batches_batch_type: Mapped[List["Batch"]] = relationship("Batch", foreign_keys="[Batch.batch_type_id]", back_populates="batch_type")
+    products_as_type: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.product_type_id]", back_populates="product_type")
+    products_as_unit: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.unit_id]", back_populates="unit")
 
     # Añadir otras relaciones inversas cuando se migren los modelos
     # products_type: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.product_type_id]", back_populates="product_type")

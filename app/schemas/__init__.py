@@ -25,6 +25,7 @@ from .animal_feeding_pivot import AnimalFeedingPivot, AnimalFeedingPivotCreate, 
 from .transaction import Transaction, TransactionCreate, TransactionUpdate, TransactionReduced
 from .batch import Batch, BatchCreate, BatchUpdate, BatchReduced # ¡Nuevo! Importa los schemas de Batch
 from .animal_batch_pivot import AnimalBatchPivot, AnimalBatchPivotCreate, AnimalBatchPivotReduced # ¡Nuevo! Importa los schemas de AnimalBatchPivot
+from .product import Product, ProductCreate, ProductUpdate, ProductReduced # ¡NUEVO! Importa los schemas de Product
 # Cuando crees otros schemas, impórtalos aquí también:
 # from .product import Product, ProductCreate, ProductUpdate, ProductReduced
 # ... y así sucesivamente para todos tus schemas.

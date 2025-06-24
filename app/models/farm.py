@@ -14,6 +14,7 @@ from .user import User
 from .lot import Lot
 from .transaction import Transaction
 from .batch import Batch # ¡Nuevo! Importa el modelo Batch
+from .product import Product # ¡NUEVO! Importa el modelo Product
 
 class Farm(BaseModel): # Hereda de BaseModel
     __tablename__ = "farms"
@@ -32,9 +33,9 @@ class Farm(BaseModel): # Hereda de BaseModel
     farm_accesses = relationship("UserFarmAccess", back_populates="farm", cascade="all, delete-orphan")
     outgoing_transactions: Mapped[List["Transaction"]] = relationship("Transaction", foreign_keys="[Transaction.source_farm_id]", back_populates="source_farm")
     incoming_transactions: Mapped[List["Transaction"]] = relationship("Transaction", foreign_keys="[Transaction.destination_farm_id]", back_populates="destination_farm")
-    
-    # ¡Nueva relación para Batch!
     batches: Mapped[List["Batch"]] = relationship("Batch", back_populates="farm", cascade="all, delete-orphan") # ¡Actualizado!
+    products: Mapped[List["Product"]] = relationship("Product", back_populates="farm", cascade="all, delete-orphan") # ¡NUEVO! Añade esta relación
+
 
     # Añadir otras relaciones inversas cuando se migren los modelos
     # products = relationship("Product", back_populates="farm")

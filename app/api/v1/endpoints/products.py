@@ -2,151 +2,153 @@
         from typing import List
         from fastapi import APIRouter, Depends, HTTPException, status
         from sqlalchemy.ext.asyncio import AsyncSession
+        import uuid # Importa uuid
 
-        from app import crud, schemas
-        from app.api import deps
+        # --- Importaciones de módulos centrales ---
+        from app import crud, schemas, models # Acceso de alto nivel a tus módulos principales
+
+        # --- Importaciones de dependencias y seguridad ---
+        from app.api import deps # Acceso a las dependencias de FastAPI (get_db, get_current_user, etc.)
 
         router = APIRouter()
 
-        @router.post("/", response_model=schemas.ProductInDB, status_code=status.HTTP_201_CREATED)
+        @router.post("/", response_model=schemas.Product, status_code=status.HTTP_201_CREATED)
         async def create_product(
             product_in: schemas.ProductCreate,
             db: AsyncSession = Depends(deps.get_db),
-            current_user: schemas.UserInDB = Depends(deps.get_current_active_user),
+            current_user: schemas.User = Depends(deps.get_current_active_user), # Usar schemas.User según tu User model
         ):
             """
-            Creates a new product in the system.
+            Crea un nuevo producto en el sistema.
+            - Requiere autenticación.
+            - El usuario debe ser propietario de la finca especificada.
+            - Valida que `product_type_id` y `unit_id` existan en MasterData con las categorías correctas.
             """
-            # Verify that product_type_id and unit_id exist in MasterData and are of the correct type
-            product_type = await crud.master_data.get(db, product_in.product_type_id)
-            if not product_type or product_type.category != "product_type":
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid product type. It must be a MasterData entry with category 'product_type'."
-                )
-            
-            unit = await crud.master_data.get(db, product_in.unit_id)
-            if not unit or unit.category != "unit_of_measure": # Assuming you use 'unit_of_measure' as category
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid unit of measure. It must be a MasterData entry with category 'unit_of_measure'."
-                )
-
-            # Ensure that the farm exists and belongs to the current user (or has permissions)
+            # Verificar que la finca existe y pertenece al usuario actual (o tiene permisos)
             farm = await crud.farm.get(db, product_in.farm_id)
-            if not farm or farm.created_by_user_id != current_user.id:
+            if not farm or farm.owner_user_id != current_user.id:
                 raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Farm not found or you do not have permissions to create products on it."
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Farm not found or you do not have permissions to create products in it."
                 )
 
-            product_data = product_in.model_dump()
-            product_data["created_by_user_id"] = current_user.id
-            
-            new_product = await crud.product.create(db, obj_in=product_data)
-            return new_product
+            try:
+                new_product = await crud.product.create(db, obj_in=product_in, created_by_user_id=current_user.id)
+                return new_product
+            except crud.exceptions.NotFoundError as e:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+            except crud.exceptions.AlreadyExistsError as e:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+            except crud.exceptions.CRUDException as e:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
 
-        @router.get("/{product_id}", response_model=schemas.ProductInDB)
+
+        @router.get("/{product_id}", response_model=schemas.Product)
         async def read_product(
-            product_id: int,
+            product_id: uuid.UUID, # Cambiado a uuid.UUID
             db: AsyncSession = Depends(deps.get_db),
-            current_user: schemas.UserInDB = Depends(deps.get_current_active_user),
+            current_user: schemas.User = Depends(deps.get_current_active_user),
         ):
             """
-            Gets a product by its ID.
+            Obtiene un producto por su ID.
+            - Requiere autenticación.
+            - El usuario debe ser propietario de la finca a la que pertenece el producto.
             """
             product = await crud.product.get(db, product_id)
             if not product:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-            # Verify that the product belongs to a farm of the current user
+            
+            # Verificar que el producto pertenece a una finca del usuario actual
             farm = await crud.farm.get(db, product.farm_id)
-            if not farm or farm.created_by_user_id != current_user.id:
+            if not farm or farm.owner_user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permissions to access this product."
                 )
             return product
 
-        @router.get("/by_farm/{farm_id}", response_model=List[schemas.ProductInDB])
+        @router.get("/by_farm/{farm_id}", response_model=List[schemas.Product])
         async def read_products_by_farm(
-            farm_id: int,
+            farm_id: uuid.UUID, # Cambiado a uuid.UUID
             db: AsyncSession = Depends(deps.get_db),
-            current_user: schemas.UserInDB = Depends(deps.get_current_active_user),
+            current_user: schemas.User = Depends(deps.get_current_active_user),
         ):
             """
-            Gets all products associated with a specific farm.
+            Obtiene todos los productos asociados a una finca específica.
+            - Requiere autenticación.
+            - El usuario debe ser propietario de la finca especificada.
             """
             farm = await crud.farm.get(db, farm_id)
-            if not farm or farm.created_by_user_id != current_user.id:
+            if not farm or farm.owner_user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permissions to access products for this farm."
                 )
-            products = await crud.product.get_by_farm_id(db, farm_id=farm_id)
+            products = await crud.product.get_multi_by_farm_id(db, farm_id=farm_id)
             return products
 
-        @router.put("/{product_id}", response_model=schemas.ProductInDB)
+        @router.put("/{product_id}", response_model=schemas.Product)
         async def update_product(
-            product_id: int,
+            product_id: uuid.UUID, # Cambiado a uuid.UUID
             product_in: schemas.ProductUpdate,
             db: AsyncSession = Depends(deps.get_db),
-            current_user: schemas.UserInDB = Depends(deps.get_current_active_user),
+            current_user: schemas.User = Depends(deps.get_current_active_user),
         ):
             """
-            Updates an existing product by its ID.
+            Actualiza un producto existente por su ID.
+            - Requiere autenticación.
+            - El usuario debe ser propietario de la finca a la que pertenece el producto.
+            - Valida que `product_type_id` y `unit_id` existan en MasterData con las categorías correctas si se actualizan.
             """
             product = await crud.product.get(db, product_id)
             if not product:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
             
-            # Verify that the product belongs to a farm of the current user
+            # Verificar que el producto pertenece a una finca del usuario actual
             farm = await crud.farm.get(db, product.farm_id)
-            if not farm or farm.created_by_user_id != current_user.id:
+            if not farm or farm.owner_user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permissions to update this product."
                 )
 
-            # Optional: Validate if product_type_id or unit_id are updated
-            if product_in.product_type_id:
-                product_type = await crud.master_data.get(db, product_in.product_type_id)
-                if not product_type or product_type.category != "product_type":
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid product type. It must be a MasterData entry with category 'product_type'."
-                    )
-            if product_in.unit_id:
-                unit = await crud.master_data.get(db, product_in.unit_id)
-                if not unit or unit.category != "unit_of_measure":
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Invalid unit of measure. It must be a MasterData entry with category 'unit_of_measure'."
-                    )
+            try:
+                updated_product = await crud.product.update(db, db_obj=product, obj_in=product_in)
+                return updated_product
+            except crud.exceptions.NotFoundError as e:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+            except crud.exceptions.AlreadyExistsError as e:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+            except crud.exceptions.CRUDException as e:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
 
-            updated_product = await crud.product.update(db, db_obj=product, obj_in=product_in)
-            return updated_product
 
-        @router.delete("/{product_id}", response_model=schemas.ProductInDB)
+        @router.delete("/{product_id}", response_model=schemas.Product)
         async def delete_product(
-            product_id: int,
+            product_id: uuid.UUID, # Cambiado a uuid.UUID
             db: AsyncSession = Depends(deps.get_db),
-            current_user: schemas.UserInDB = Depends(deps.get_current_active_user),
+            current_user: schemas.User = Depends(deps.get_current_active_user),
         ):
             """
-            Deletes a product by its ID.
+            Elimina un producto por su ID.
+            - Requiere autenticación.
+            - El usuario debe ser propietario de la finca a la que pertenece el producto.
             """
             product = await crud.product.get(db, product_id)
             if not product:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Producto no encontrado")
             
-            # Verify that the product belongs to a farm of the current user
+            # Verificar que el producto pertenece a una finca del usuario actual
             farm = await crud.farm.get(db, product.farm_id)
-            if not farm or farm.created_by_user_id != current_user.id:
+            if not farm or farm.owner_user_id != current_user.id:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="You do not have permissions to delete this product."
                 )
 
-            deleted_product = await crud.product.remove(db, id=product_id)
-            return deleted_product
+            try:
+                deleted_product = await crud.product.delete(db, id=product_id) # Usa .delete en lugar de .remove
+                return deleted_product
+            except crud.exceptions.CRUDException as e:
+                raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
         

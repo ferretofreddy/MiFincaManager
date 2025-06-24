@@ -7,7 +7,7 @@ import uuid
 # Importa los ENUMS desde donde los tengas definidos
 # Asumo que tienes un archivo app_enums.py en la raíz del proyecto.
 # Si no, deberías moverlos a app/core/enums.py por ejemplo.
-from app_enums import (
+from app.enums import (
     SexEnumPython, AnimalStatusEnumPython, AnimalOriginEnumPython, HealthEventTypeEnumPython,
     ReproductiveEventTypeEnumPython, GestationDiagnosisResultEnumPython, TransactionTypeEnumPython, ParamDataTypeEnumPython
 )

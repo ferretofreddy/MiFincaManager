@@ -1,4 +1,5 @@
-# app_enums.py
+# app/enums/__init__.py
+# Se importan todos los Enum directamente
 import enum
 
 # Sexo de los animales
