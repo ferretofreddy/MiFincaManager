@@ -4,9 +4,9 @@ from typing import Optional, List, ForwardRef
 from datetime import datetime
 import uuid
 
-# Importa los esquemas reducidos de Role y Permission para anidarlos si es necesario
-from app.schemas.role import RoleReduced
-from app.schemas.permission import PermissionReduced
+# Define ForwardRef para esquemas si hay circularidad
+RoleReduced = ForwardRef("RoleReduced")
+PermissionReduced = ForwardRef("PermissionReduced")
 
 # --- Esquemas para la Asociación Directa RolePermission ---
 class RolePermissionBase(BaseModel):
@@ -26,10 +26,8 @@ class RolePermission(RolePermissionBase):
     
     # Opcional: Incluir los objetos Role y Permission completos o reducidos
     # si se desea devolver la información completa de la asociación.
-    role: Optional[RoleReduced] = None
-    permission: Optional[PermissionReduced] = None
+    role: Optional["RoleReduced"] = None # <--- USAR REFERENCIA STRING
+    permission: Optional["PermissionReduced"] = None # <--- USAR REFERENCIA STRING
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-RolePermission.model_rebuild()

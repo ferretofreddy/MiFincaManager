@@ -43,6 +43,3 @@ class Role(RoleBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-RoleReduced.model_rebuild()
-Role.model_rebuild()

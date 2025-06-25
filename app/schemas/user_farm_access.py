@@ -63,8 +63,6 @@ class UserFarmAccess(UserFarmAccessBase):
     updated_at: Optional[datetime] = None
 
     # Relaciones Pydantic para incluir datos relacionados
-    # Asegúrate de que estos esquemas (UserReduced, FarmReduced) sean importados
-    # o definidos como ForwardRef en el archivo __init__.py de esquemas o en sus propios archivos.
     user: "UserReduced"
     farm: "FarmReduced"
     assigned_by_user: "UserReduced"
@@ -73,8 +71,3 @@ class UserFarmAccess(UserFarmAccessBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-# Esto es crucial si hay referencias circulares entre los esquemas,
-# por ejemplo, si UserReduced o FarmReduced están definidos en otros archivos.
-UserFarmAccessReduced.model_rebuild()
-UserFarmAccess.model_rebuild()

@@ -4,8 +4,11 @@ from typing import Optional, List, ForwardRef
 from datetime import datetime
 import uuid
 
-# Importa el UserReduced de tu nuevo módulo de schemas de usuario
-from app.schemas.user import UserReduced
+# Define ForwardRef para esquemas si hay circularidad
+UserReduced = ForwardRef("UserReduced")
+LotReduced = ForwardRef('LotReduced')
+UserFarmAccessReduced = ForwardRef('UserFarmAccessReduced')
+AnimalLocationHistoryReduced = ForwardRef('AnimalLocationHistoryReduced')
 
 # --- Esquemas Reducidos (FarmReduced se queda aquí) ---
 class FarmReduced(BaseModel):
@@ -42,7 +45,7 @@ class Farm(FarmBase):
     created_at: datetime # Heredado de BaseModel
     updated_at: datetime # Heredado de BaseModel
 
-    owner_user: Optional[UserReduced] = None # Usa el esquema reducido de User
+    owner_user: Optional["UserReduced"] = None # ¡AHORA USA LA REFERENCIA STRING!
 
     # Aquí irían las relaciones a LotReduced, UserFarmAccessReduced, etc.
     # Por ahora las dejamos como ForwardRef, pero deberás migrarlas y luego quitarlas.
@@ -51,8 +54,3 @@ class Farm(FarmBase):
     animal_locations: List[ForwardRef('AnimalLocationHistoryReduced')] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-# Solo si los esquemas reducidos no tienen ForwardRefs propios no necesitan rebuild
-FarmReduced.model_rebuild()
-Farm.model_rebuild()

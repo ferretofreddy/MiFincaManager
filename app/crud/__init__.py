@@ -28,6 +28,7 @@ from .batches import batch as batch_crud
 from .animal_batch_pivot import animal_batch_pivot as animal_batch_pivot_crud
 from .products import product as product_crud
 from .user_farm_access import user_farm_access
+from .base import CRUDBase
 
 
 # Cuando crees otros módulos CRUD, impórtalos aquí también:

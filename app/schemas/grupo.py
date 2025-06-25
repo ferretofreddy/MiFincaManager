@@ -52,7 +52,3 @@ class Grupo(GrupoBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-GrupoReduced.model_rebuild()
-GrupoReducedForAnimalGroup.model_rebuild()
-Grupo.model_rebuild()

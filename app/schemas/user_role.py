@@ -4,9 +4,9 @@ from typing import Optional, List, ForwardRef
 from datetime import datetime
 import uuid
 
-# Importa los esquemas reducidos de User y Role para anidarlos si es necesario
-from app.schemas.user import UserReduced
-from app.schemas.role import RoleReduced
+# Define ForwardRef para esquemas si hay circularidad
+UserReduced = ForwardRef("UserReduced")
+RoleReduced = ForwardRef("RoleReduced")
 
 # --- Esquemas para la Asociación Directa UserRole ---
 class UserRoleBase(BaseModel):
@@ -25,11 +25,9 @@ class UserRole(UserRoleBase):
     assigned_at: datetime # Campo adicional de la tabla de unión
     
     # Opcional: Incluir los objetos User y Role completos o reducidos
-    user: Optional[UserReduced] = None
-    role: Optional[RoleReduced] = None
-    assigned_by_user: Optional[UserReduced] = None # Quien asignó el rol
+    user: Optional["UserReduced"] = None # <--- USAR REFERENCIA STRING
+    role: Optional["RoleReduced"] = None # <--- USAR REFERENCIA STRING
+    assigned_by_user: Optional["UserReduced"] = None # Quien asignó el rol # <--- USAR REFERENCIA STRING
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-UserRole.model_rebuild()

@@ -68,8 +68,3 @@ class AnimalGroup(AnimalGroupBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-AnimalGroupReduced.model_rebuild()
-AnimalGroupReducedForAnimal.model_rebuild()
-AnimalGroupReducedForGrupo.model_rebuild()
-AnimalGroup.model_rebuild()

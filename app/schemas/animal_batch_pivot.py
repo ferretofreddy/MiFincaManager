@@ -39,6 +39,3 @@ class AnimalBatchPivot(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-AnimalBatchPivotReduced.model_rebuild()
-AnimalBatchPivot.model_rebuild()

@@ -72,7 +72,3 @@ class ReproductiveEvent(ReproductiveEventBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-ReproductiveEventReduced.model_rebuild()
-ReproductiveEventReducedForOffspringBorn.model_rebuild()
-ReproductiveEvent.model_rebuild()

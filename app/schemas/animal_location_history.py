@@ -66,8 +66,3 @@ class AnimalLocationHistory(AnimalLocationHistoryBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-AnimalLocationHistoryReduced.model_rebuild()
-AnimalLocationHistoryReducedForAnimal.model_rebuild()
-AnimalLocationHistoryReducedForLot.model_rebuild()
-AnimalLocationHistory.model_rebuild()

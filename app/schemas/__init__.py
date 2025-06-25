@@ -2,36 +2,47 @@
 # Este archivo marca 'schemas' como un paquete.
 # Aquí importaremos los esquemas de Pydantic para un acceso centralizado si se desea.
 
-from .user import User, UserCreate, UserUpdate, UserReduced
-from .farm import Farm, FarmCreate, FarmUpdate, FarmReduced
-from .lot import Lot, LotCreate, LotUpdate, LotReduced
-from .master_data import MasterData, MasterDataCreate, MasterDataUpdate, MasterDataReduced
-from .role import Role, RoleCreate, RoleUpdate, RoleReduced
-from .permission import Permission, PermissionCreate, PermissionUpdate, PermissionReduced
-from .module import Module, ModuleCreate, ModuleUpdate, ModuleReduced
-from .role_permission import RolePermission, RolePermissionCreate
-from .user_role import UserRole, UserRoleCreate
-from .animal import Animal, AnimalCreate, AnimalUpdate, AnimalReduced, AnimalReducedForAnimalGroup, AnimalReducedForUser
-from .grupo import Grupo, GrupoCreate, GrupoUpdate, GrupoReduced, GrupoReducedForAnimalGroup
-from .animal_group import AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate, AnimalGroupReduced, AnimalGroupReducedForAnimal, AnimalGroupReducedForGrupo
-from .animal_location_history import AnimalLocationHistory, AnimalLocationHistoryCreate, AnimalLocationHistoryUpdate, AnimalLocationHistoryReduced, AnimalLocationHistoryReducedForAnimal, AnimalLocationHistoryReducedForLot
-from .health_event import HealthEvent, HealthEventCreate, HealthEventUpdate, HealthEventReduced, HealthEventReducedForPivot
-from .animal_health_event_pivot import AnimalHealthEventPivot, AnimalHealthEventPivotCreate, AnimalHealthEventPivotReduced, AnimalHealthEventPivotReducedForAnimal, AnimalHealthEventPivotReducedForHealthEvent
-from .reproductive_event import ReproductiveEvent, ReproductiveEventCreate, ReproductiveEventUpdate, ReproductiveEventReduced, ReproductiveEventReducedForOffspringBorn
-from .offspring_born import OffspringBorn, OffspringBornCreate, OffspringBornUpdate, OffspringBornReduced
-from .weighing import Weighing, WeighingCreate, WeighingUpdate, WeighingReduced
-from .feeding import Feeding, FeedingCreate, FeedingUpdate, FeedingReduced
-from .animal_feeding_pivot import AnimalFeedingPivot, AnimalFeedingPivotCreate, AnimalFeedingPivotReduced
-from .transaction import Transaction, TransactionCreate, TransactionUpdate, TransactionReduced
-from .batch import Batch, BatchCreate, BatchUpdate, BatchReduced
-from .animal_batch_pivot import AnimalBatchPivot, AnimalBatchPivotCreate, AnimalBatchPivotReduced
-from .product import Product, ProductCreate, ProductUpdate, ProductReduced
-from .user_farm_access import UserFarmAccess, UserFarmAccessCreate, UserFarmAccessUpdate, UserFarmAccessReduced
+import pkgutil
+import inspect
+from pydantic import BaseModel
 
-# Cuando crees otros schemas, impórtalos aquí también:
-# from .product import Product, ProductCreate, ProductUpdate, ProductReduced
-# ... y así sucesivamente para todos tus schemas.
+# Lista de módulos de esquemas que deben ser importados y reconstruidos.
+# El orden de las importaciones aquí no es tan crítico como el de rebuild,
+# pero es buena práctica listarlos.
+# NO USAR "from .modulo import Clase1, Clase2" aquí, importaremos dinámicamente.
 
-# Esquemas de seguridad y token
-from .token import Token, TokenPayload
+__all__ = [] # Para controlar lo que se exporta al importar 'schemas'
 
+for loader, module_name, is_pkg in pkgutil.walk_packages(__path__):
+    # Ignorar __init__.py a sí mismo
+    if module_name == '__init__':
+        continue
+    # Importar cada módulo de esquema
+    module = loader.find_spec(module_name).loader.load_module(module_name)
+    
+    # Añadir los nombres de las clases (esquemas) al __all__ del paquete
+    for name, obj in inspect.getmembers(module):
+        if inspect.isclass(obj) and issubclass(obj, BaseModel) and obj.__name__ != 'BaseModel':
+            globals()[name] = obj # Hace la clase accesible globalmente en __init__.py
+            __all__.append(name)
+
+# --- RECONSTRUCCIÓN DE MODELOS CENTRALIZADA Y DINÁMICA ---
+# Este paso es CRÍTICO para Pydantic 2.x con ForwardRefs y dependencias cíclicas.
+# Llama a model_rebuild() para todos los esquemas BaseModel importados.
+for name in list(globals().keys()): # Iterar sobre una copia de las claves para evitar errores durante la modificación
+    obj = globals()[name]
+    if inspect.isclass(obj) and issubclass(obj, BaseModel) and obj.__name__ != 'BaseModel':
+        try:
+            # print(f"Intentando reconstruir: {obj.__name__}") # Para depuración
+            obj.model_rebuild()
+        except Exception as e:
+            # Esto captura errores durante la reconstrucción, lo que puede ayudar a identificar dependencias restantes
+            print(f"Error al reconstruir el modelo {obj.__name__}: {e}")
+            # Si el error persiste para un modelo específico, puede indicar un ForwardRef
+            # mal formado o un ciclo muy complejo.
+
+# Puedes eliminar las líneas de importación manuales anteriores si confías en la carga dinámica.
+# Ejemplo de imports que se volverían redundantes (pero mantenlos por si el método dinámico falla)
+# from .user import User, UserCreate, UserUpdate, UserReduced
+# from .farm import Farm, FarmCreate, FarmUpdate, FarmReduced
+# ... y así sucesivamente

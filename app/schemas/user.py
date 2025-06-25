@@ -2,6 +2,7 @@
 from typing import Optional, List, ForwardRef
 from datetime import datetime
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
+import uuid
 
 # Importa otros esquemas o define ForwardRef para evitar circularidad
 FarmReduced = ForwardRef("FarmReduced")
@@ -20,6 +21,7 @@ AnimalLocationHistoryReduced = ForwardRef("AnimalLocationHistoryReduced")
 ProductReduced = ForwardRef("ProductReduced")
 RoleReduced = ForwardRef("RoleReduced")
 UserRole = ForwardRef("UserRole")
+UserFarmAccess = ForwardRef("UserFarmAccess")
 
 class UserBase(BaseModel):
     # ... (tus campos existentes) ...
@@ -80,7 +82,3 @@ class User(UserBase):
     roles: List["RoleReduced"] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs
-UserReduced.model_rebuild()
-User.model_rebuild()

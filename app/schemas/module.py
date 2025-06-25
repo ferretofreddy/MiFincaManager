@@ -4,8 +4,8 @@ from typing import Optional, List, ForwardRef
 from datetime import datetime
 import uuid
 
-# Importa PermissionReduced de tu nuevo módulo de schemas de permiso
-from app.schemas.permission import PermissionReduced
+# Define ForwardRef para esquemas si hay circularidad
+PermissionReduced = ForwardRef("PermissionReduced")
 
 # --- Esquemas Reducidos para Romper Ciclos de Recursión ---
 # Puede que necesites este si Module se anida en otros schemas
@@ -33,10 +33,6 @@ class Module(ModuleBase):
     updated_at: datetime # Heredado de BaseModel
 
     # Relaciones con otros Schemas
-    permissions: List[PermissionReduced] = [] # Para la relación inversa con Permission
+    permissions: List["PermissionReduced"] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-ModuleReduced.model_rebuild()
-Module.model_rebuild()

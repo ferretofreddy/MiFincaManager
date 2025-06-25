@@ -51,6 +51,3 @@ class OffspringBorn(OffspringBornBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-OffspringBornReduced.model_rebuild()
-OffspringBorn.model_rebuild()

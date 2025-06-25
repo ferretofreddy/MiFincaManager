@@ -7,7 +7,15 @@ import uuid
 # Importa FarmReduced de tu nuevo módulo de schemas de finca
 from app.schemas.farm import FarmReduced
 
-# --- Esquemas Reducidos (LotReduced se queda aquí) ---
+# Define ForwardRef para esquemas si hay circularidad
+
+UserReduced = ForwardRef("UserReduced")
+LotReduced = ForwardRef('LotReduced')
+UserFarmAccessReduced = ForwardRef('UserFarmAccessReduced')
+AnimalLocationHistoryReduced = ForwardRef('AnimalLocationHistoryReduced')
+GrupoReduced = ForwardRef('GrupoReduced')
+
+# --- Esquemas Reducidos
 class LotReduced(BaseModel):
     id: uuid.UUID
     name: str
@@ -39,11 +47,8 @@ class Lot(LotBase):
     updated_at: datetime # Heredado de BaseModel
 
     farm: Optional[FarmReduced] = None # Usa el esquema reducido de Farm
-    grupos: List[ForwardRef('GrupoReduced')] = [] # Se usará después de migrar Grupo
-    animal_location_history: List[ForwardRef('AnimalLocationHistoryReduced')] = [] # Se usará después de migrar AnimalLocationHistory
+    grupos: List["GrupoReduced"] = []
+    animal_location_history: List["AnimalLocationHistoryReduced"] = [] # Se usará después de migrar AnimalLocationHistory
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-LotReduced.model_rebuild()
-Lot.model_rebuild()

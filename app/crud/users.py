@@ -13,7 +13,7 @@ from app.schemas.user import UserCreate, UserUpdate
 # Importa la CRUDBase, get_password_hash y las excepciones
 from app.crud.base import CRUDBase
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
-from app_security import get_password_hash # Asegúrate de que app_security esté accesible
+from app.core.security import get_password_hash 
 
 class CRUDUser(CRUDBase[User, UserCreate, UserUpdate]):
     """

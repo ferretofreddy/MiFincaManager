@@ -32,6 +32,8 @@ from .batch import Batch
 from .animal_batch_pivot import AnimalBatchPivot
 from app.models.product import Product
 from .user_farm_access import UserFarmAccess
+from .configuration_parameter import ConfigurationParameter
+
 
 
 # Cuando crees otros modelos, impórtalos aquí también:

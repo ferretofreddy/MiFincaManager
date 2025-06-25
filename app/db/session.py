@@ -2,7 +2,7 @@
 # Configura el motor de la base de datos y la fábrica de sesiones asíncronas.
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from app.core.config import settings # Importa la configuración centralizada
+from app.core.config import settings # ¡Ahora esto sí funcionará correctamente!
 
 # Crea el motor de la base de datos asíncrono.
 # Utiliza la URL y las configuraciones del pool de conexiones definidas en settings.
@@ -32,3 +32,4 @@ async def get_db() -> AsyncSession:
     """
     async with SessionLocal() as session:
         yield session
+

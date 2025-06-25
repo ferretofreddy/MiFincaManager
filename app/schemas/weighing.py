@@ -3,11 +3,11 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List, ForwardRef
 from datetime import datetime
 import uuid
-from decimal import Decimal # Importa Decimal
+from decimal import Decimal
 
 # Importa los schemas reducidos de las entidades relacionadas
 from app.schemas.user import UserReduced
-from app.schemas.animal import AnimalReduced # Usamos el AnimalReduced general o creamos uno específico si es necesario
+from app.schemas.animal import AnimalReduced
 
 # --- Esquemas Reducidos para Weighing ---
 class WeighingReduced(BaseModel):
@@ -21,7 +21,7 @@ class WeighingReduced(BaseModel):
 class WeighingBase(BaseModel):
     animal_id: uuid.UUID = Field(..., description="ID of the animal being weighed")
     weighing_date: datetime = Field(default_factory=datetime.utcnow, description="Date and time of the weighing")
-    weight_kg: Decimal = Field(..., gt=0, decimal_places=2, description="Weight of the animal in kilograms (greater than 0)")
+    weight_kg: Decimal = Field(..., gt=0, description="Weight of the animal in kilograms (greater than 0)")
     notes: Optional[str] = Field(None, description="Any specific notes about the weighing")
 
     model_config = ConfigDict(from_attributes=True)
@@ -33,7 +33,7 @@ class WeighingUpdate(WeighingBase):
     # Todos los campos opcionales para permitir actualizaciones parciales
     animal_id: Optional[uuid.UUID] = None
     weighing_date: Optional[datetime] = None
-    weight_kg: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    weight_kg: Optional[Decimal] = Field(None, gt=0)
     notes: Optional[str] = None
 
 # --- Esquema de Lectura/Respuesta (con relaciones) ---
@@ -44,11 +44,7 @@ class Weighing(WeighingBase):
     updated_at: datetime # Heredado de BaseModel
 
     # Relaciones directas (cargadas para la respuesta)
-    animal: Optional[AnimalReduced] = None # Usar el schema reducido apropiado
-    recorded_by_user: Optional[UserReduced] = None # Usar el schema reducido
+    animal: Optional[AnimalReduced] = None
+    recorded_by_user: Optional[UserReduced] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs (si se usaron)
-WeighingReduced.model_rebuild()
-Weighing.model_rebuild()

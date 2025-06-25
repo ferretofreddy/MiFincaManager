@@ -71,7 +71,3 @@ class HealthEvent(HealthEventBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-HealthEventReduced.model_rebuild()
-HealthEventReducedForPivot.model_rebuild()
-HealthEvent.model_rebuild()

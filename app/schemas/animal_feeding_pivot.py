@@ -3,11 +3,11 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, ForwardRef
 from datetime import datetime
 import uuid
-from decimal import Decimal # Importa Decimal
+from decimal import Decimal
 
 # Importa los schemas reducidos de las entidades relacionadas si es necesario para relaciones internas del pivote
-from app.schemas.animal import AnimalReduced # Para AnimalFeedingPivot si necesitamos cargar el Animal
-from app.schemas.feeding import FeedingReduced # Para AnimalFeedingPivot si necesitamos cargar el Feeding
+from app.schemas.animal import AnimalReduced
+from app.schemas.feeding import FeedingReduced
 
 # --- Esquemas Reducidos para AnimalFeedingPivot ---
 class AnimalFeedingPivotReduced(BaseModel):
@@ -20,7 +20,7 @@ class AnimalFeedingPivotReduced(BaseModel):
 class AnimalFeedingPivotCreate(BaseModel):
     animal_id: uuid.UUID = Field(..., description="ID of the animal involved in this feeding event")
     feeding_event_id: uuid.UUID = Field(..., description="ID of the feeding event")
-    quantity_fed: Optional[Decimal] = Field(None, gt=0, decimal_places=2, description="Specific quantity fed to this animal, if different from the event's total quantity")
+    quantity_fed: Optional[Decimal] = Field(None, gt=0, description="Specific quantity fed to this animal, if different from the event's total quantity")
     notes: Optional[str] = Field(None, description="Notes specific to this animal's participation in the feeding event")
 
     model_config = ConfigDict(from_attributes=True)
@@ -37,10 +37,6 @@ class AnimalFeedingPivot(BaseModel):
     # Se pueden incluir versiones reducidas de las entidades relacionadas si es necesario
     # para evitar recursión al cargar el pivote directamente.
     animal: Optional[AnimalReduced] = None
-    feeding_event: Optional[FeedingReduced] = None # Usar la versión reducida de Feeding
+    feeding_event: Optional[FeedingReduced] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs
-AnimalFeedingPivotReduced.model_rebuild()
-AnimalFeedingPivot.model_rebuild()

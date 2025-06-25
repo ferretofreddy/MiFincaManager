@@ -55,8 +55,3 @@ class AnimalHealthEventPivot(AnimalHealthEventPivotBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs (si se usaron)
-AnimalHealthEventPivotReduced.model_rebuild()
-AnimalHealthEventPivotReducedForHealthEvent.model_rebuild()
-AnimalHealthEventPivotReducedForAnimal.model_rebuild()
-AnimalHealthEventPivot.model_rebuild()

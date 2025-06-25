@@ -64,8 +64,3 @@ class Batch(BatchBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-# Reconstruir los modelos para resolver ForwardRefs
-BatchReduced.model_rebuild()
-BatchCreate.model_rebuild() # Puede que necesite si animal_ids es un ForwardRef
-BatchUpdate.model_rebuild() # Puede que necesite si animal_ids es un ForwardRef
-Batch.model_rebuild()

@@ -5,9 +5,11 @@ from datetime import datetime
 import uuid
 
 # Importa RoleReduced de tu nuevo módulo de schemas de rol
-from app.schemas.role import RoleReduced
-# ¡Nuevo! Importa ModuleReduced de tu nuevo módulo de schemas de módulo
-from app.schemas.module import ModuleReduced # Asegúrate de que esta línea esté presente
+RoleReduced = ForwardRef("RoleReduced")
+
+# Importa ModuleReduced de tu nuevo módulo de schemas de módulo
+ModuleReduced = ForwardRef("ModuleReduced")
+
 
 # --- Esquemas Reducidos para Romper Ciclos de Recursión ---
 # Puede que necesites este si Permission se anida en otros schemas
@@ -38,12 +40,7 @@ class Permission(PermissionBase):
     updated_at: datetime # Heredado de BaseModel
 
     # Relaciones con otros Schemas
-    # Ahora que ModuleReduced existe, lo importamos directamente. ¡Ya no es ForwardRef!
-    module: Optional[ModuleReduced] = None # ¡Actualizado! Ya no es ForwardRef
-    roles: List[RoleReduced] = [] # Para la relación inversa con Role
+    module: Optional["ModuleReduced"] = None
+    roles: List["RoleReduced"] = []
 
     model_config = ConfigDict(from_attributes=True)
-
-# Reconstruir los modelos para resolver ForwardRefs (si los hay)
-PermissionReduced.model_rebuild()
-Permission.model_rebuild()
