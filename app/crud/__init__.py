@@ -26,7 +26,6 @@ from .role import role
 from .role_permissions import role_permission
 from .user_roles import user_role
 
-
 # Últimos CRUDs
 from .products import product
 from .user_farm_access import user_farm_access
@@ -34,7 +33,8 @@ from .animal_batch_pivot import animal_batch_pivot
 from .animal_feeding_pivot import animal_feeding_pivot
 from .animal_health_event_pivot import animal_health_event_pivot
 from .animal_location_history import animal_location_history
+from .configuration_parameter import configuration_parameter
 
 # Cuando crees otros módulos CRUD, impórtalos aquí también:
-# from .products import product as product_crud
 # ... y así sucesivamente.
+

@@ -1,4 +1,4 @@
-# app/crud/exceptions.py
+# app/crud/exceptions.py 
 # Define excepciones personalizadas para operaciones CRUD.
 
 class CRUDException(Exception):

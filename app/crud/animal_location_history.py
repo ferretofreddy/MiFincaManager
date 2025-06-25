@@ -1,5 +1,5 @@
 # app/crud/animal_location_history.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any
 import uuid
 from datetime import datetime
 
@@ -7,12 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError as DBIntegrityError
 
-# Importa el modelo AnimalLocationHistory y los esquemas
 from app.models.animal_location_history import AnimalLocationHistory
 from app.schemas.animal_location_history import AnimalLocationHistoryCreate, AnimalLocationHistoryUpdate
 
-# Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
 
@@ -21,7 +20,6 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
     Clase CRUD específica para el modelo AnimalLocationHistory.
     Gestiona el historial de ubicación de los animales en lotes.
     """
-
     async def create(self, db: AsyncSession, *, obj_in: AnimalLocationHistoryCreate, created_by_user_id: uuid.UUID) -> AnimalLocationHistory:
         """
         Crea una nueva entrada en el historial de ubicación de un animal.
@@ -44,7 +42,6 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
         #     # Esto es una simplificación, la lógica real puede ser más compleja
         #     # como verificar que entry_date de la nueva entrada sea posterior a la de la anterior.
 
-
         try:
             db_obj = self.model(**obj_in.model_dump(), created_by_user_id=created_by_user_id)
             db.add(db_obj)
@@ -62,11 +59,14 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
                 .filter(AnimalLocationHistory.id == db_obj.id)
             )
             return result.scalar_one_or_none()
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear AnimalLocationHistory: {e}") from e
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating AnimalLocationHistory: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, history_id: uuid.UUID) -> Optional[AnimalLocationHistory]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[AnimalLocationHistory]:
         """
         Obtiene una entrada del historial de ubicación por su ID, cargando las relaciones.
         """
@@ -77,7 +77,7 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
                 selectinload(self.model.lot),
                 selectinload(self.model.created_by_user)
             )
-            .filter(self.model.id == history_id)
+            .filter(self.model.id == id)
         )
         return result.scalar_one_or_none()
 
@@ -103,7 +103,6 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
         )
         return result.scalar_one_or_none()
 
-
     async def get_multi_by_animal_id(self, db: AsyncSession, animal_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[AnimalLocationHistory]:
         """
         Obtiene todas las entradas del historial de ubicación para un animal específico.
@@ -116,7 +115,7 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
                 selectinload(self.model.created_by_user)
             )
             .filter(self.model.animal_id == animal_id)
-            .order_by(self.model.entry_date.desc()) # Ordenar por fecha de entrada descendente
+            .order_by(self.model.entry_date.desc())
             .offset(skip)
             .limit(limit)
         )
@@ -134,30 +133,55 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
                 selectinload(self.model.created_by_user)
             )
             .filter(self.model.lot_id == lot_id)
-            .order_by(self.model.entry_date.desc()) # Ordenar por fecha de entrada descendente
+            .order_by(self.model.entry_date.desc())
             .offset(skip)
             .limit(limit)
         )
         return result.scalars().all()
 
-    async def update(self, db: AsyncSession, *, db_obj: AnimalLocationHistory, obj_in: AnimalLocationHistoryUpdate) -> AnimalLocationHistory:
+    async def update(self, db: AsyncSession, *, db_obj: AnimalLocationHistory, obj_in: Union[AnimalLocationHistoryUpdate, Dict[str, Any]]) -> AnimalLocationHistory:
         """
         Actualiza una entrada del historial de ubicación existente.
         Se usa principalmente para establecer 'departure_date'.
         """
-        updated_history = await super().update(db, db_obj=db_obj, obj_in=obj_in)
-        if updated_history:
-            result = await db.execute(
-                select(self.model)
-                .options(
-                    selectinload(self.model.animal),
-                    selectinload(self.model.lot),
-                    selectinload(self.model.created_by_user)
-                )
-                .filter(self.model.id == updated_history.id)
-            )
-            return result.scalars().first() # Changed to scalars().first()
-        return updated_history
+        try:
+            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
 
-# Crea una instancia de CRUDAnimalLocationHistory que se puede importar y usar en los routers
+            updated_history = await super().update(db, db_obj=db_obj, obj_in=update_data)
+            if updated_history:
+                result = await db.execute(
+                    select(self.model)
+                    .options(
+                        selectinload(self.model.animal),
+                        selectinload(self.model.lot),
+                        selectinload(self.model.created_by_user)
+                    )
+                    .filter(self.model.id == updated_history.id)
+                )
+                return result.scalars().first()
+            return updated_history
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error updating AnimalLocationHistory: {str(e)}") from e
+
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[AnimalLocationHistory]:
+        """
+        Elimina una entrada del historial de ubicación por su ID.
+        """
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            raise NotFoundError(f"AnimalLocationHistory with id {id} not found.")
+        
+        try:
+            await db.delete(db_obj)
+            await db.commit()
+            return db_obj
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error deleting AnimalLocationHistory: {str(e)}") from e
+
 animal_location_history = CRUDAnimalLocationHistory(AnimalLocationHistory)

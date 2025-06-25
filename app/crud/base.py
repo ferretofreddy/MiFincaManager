@@ -7,8 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func # Importa func para funciones SQL como lower, count, etc.
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
 
 from app.db.base import Base # Importa la clase Base de tu configuración
+from app.crud.exceptions import CRUDException, NotFoundError, AlreadyExistsError, IntegrityError # Importa las excepciones personalizadas
+
 
 # Define T como un TypeVar para representar un modelo de SQLAlchemy (Base)
 ModelType = TypeVar("ModelType", bound=Base)
@@ -45,12 +48,15 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             Optional[ModelType]: El objeto del modelo si se encuentra, de lo contrario, None.
         """
-        # Crea una consulta para seleccionar el registro por su ID
-        query = select(self.model).where(self.model.id == id)
-        # Ejecuta la consulta y obtiene el resultado
-        result = await db.execute(query)
-        # Retorna el primer (y único) resultado, o None si no se encuentra
-        return result.scalars().first()
+        try:
+            # Crea una consulta para seleccionar el registro por su ID
+            query = select(self.model).where(self.model.id == id)
+            # Ejecuta la consulta y obtiene el resultado
+            result = await db.execute(query)
+            # Retorna el primer (y único) resultado, o None si no se encuentra
+            return result.scalars().first()
+        except Exception as e:
+            raise CRUDException(f"Error retrieving record with ID {id} from {self.model.__tablename__}: {str(e)}") from e
 
     async def get_multi(
         self, db: AsyncSession, *, skip: int = 0, limit: int = 100
@@ -66,12 +72,16 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             List[ModelType]: Una lista de objetos del modelo.
         """
-        # Crea una consulta para seleccionar todos los registros, aplicando skip y limit
-        query = select(self.model).offset(skip).limit(limit)
-        # Ejecuta la consulta
-        result = await db.execute(query)
-        # Retorna todos los resultados como una lista
-        return result.scalars().all()
+        try:
+            # Crea una consulta para seleccionar todos los registros, aplicando skip y limit
+            query = select(self.model).offset(skip).limit(limit)
+            # Ejecuta la consulta
+            result = await db.execute(query)
+            # Retorna todos los resultados como una lista
+            return result.scalars().all()
+        except Exception as e:
+            raise CRUDException(f"Error retrieving multiple records from {self.model.__tablename__}: {str(e)}") from e
+
 
     async def create(self, db: AsyncSession, *, obj_in: CreateSchemaType) -> ModelType:
         """
@@ -84,17 +94,28 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             ModelType: El objeto del modelo creado y persistido.
         """
-        # Convierte el objeto Pydantic a un diccionario, excluyendo campos unset si los hay
-        obj_in_data = jsonable_encoder(obj_in)
-        # Crea una instancia del modelo con los datos
-        db_obj = self.model(**obj_in_data)
-        # Añade el objeto a la sesión
-        db.add(db_obj)
-        # Confirma los cambios en la base de datos
-        await db.commit()
-        # Refresca el objeto para cargar los datos generados por la DB (ej. ID, created_at)
-        await db.refresh(db_obj)
-        return db_obj
+        try:
+            # Convierte el objeto Pydantic a un diccionario, excluyendo campos unset si los hay
+            obj_in_data = jsonable_encoder(obj_in)
+            # Crea una instancia del modelo con los datos
+            db_obj = self.model(**obj_in_data)
+            # Añade el objeto a la sesión
+            db.add(db_obj)
+            # Confirma los cambios en la base de datos
+            await db.commit()
+            # Refresca el objeto para cargar los datos generados por la DB (ej. ID, created_at)
+            await db.refresh(db_obj)
+            return db_obj
+        except DBIntegrityError as e:
+            await db.rollback()
+            # Intenta determinar si es un error de clave duplicada o similar
+            # Esto puede requerir un análisis más profundo del mensaje de error o del contexto
+            # Por simplicidad, se generaliza como AlreadyExistsError si hay un IntegrityError
+            raise AlreadyExistsError(f"Integrity constraint violated during creation in {self.model.__tablename__}: {str(e)}") from e
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error creating record in {self.model.__tablename__}: {str(e)}") from e
+
 
     async def update(
         self,
@@ -115,25 +136,32 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             ModelType: El objeto del modelo actualizado.
         """
-        # Convierte el objeto existente a un diccionario
-        obj_data = jsonable_encoder(db_obj)
+        try:
+            # Convierte el objeto existente a un diccionario
+            # obj_data = jsonable_encoder(db_obj) # No siempre necesario si solo actualizamos desde obj_in
 
-        if isinstance(obj_in, dict):
-            update_data = obj_in
-        else:
-            # Si es un esquema Pydantic, convierte a diccionario y filtra campos unset
-            update_data = obj_in.model_dump(exclude_unset=True)
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                # Si es un esquema Pydantic, convierte a diccionario y filtra campos unset
+                update_data = obj_in.model_dump(exclude_unset=True)
 
-        # Itera sobre los datos de actualización y actualiza el objeto de la base de datos
-        for field in obj_data:
-            if field in update_data:
+            # Itera sobre los datos de actualización y actualiza el objeto de la base de datos
+            for field in update_data: # Itera solo sobre los campos que se desean actualizar
                 setattr(db_obj, field, update_data[field])
 
-        # Confirma los cambios y refresca el objeto
-        db.add(db_obj)
-        await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+            # Confirma los cambios y refresca el objeto
+            db.add(db_obj)
+            await db.commit()
+            await db.refresh(db_obj)
+            return db_obj
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise IntegrityError(f"Integrity constraint violated during update in {self.model.__tablename__}: {str(e)}") from e
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error updating record in {self.model.__tablename__}: {str(e)}") from e
+
 
     async def remove(self, db: AsyncSession, *, id: UUID) -> Optional[ModelType]:
         """
@@ -146,17 +174,23 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             Optional[ModelType]: El objeto del modelo eliminado si se encuentra, de lo contrario, None.
         """
-        # Busca el objeto por ID
-        query = select(self.model).where(self.model.id == id)
-        result = await db.execute(query)
-        obj = result.scalars().first()
+        try:
+            # Busca el objeto por ID
+            query = select(self.model).where(self.model.id == id)
+            result = await db.execute(query)
+            obj = result.scalars().first()
 
-        if obj:
-            # Si el objeto existe, lo elimina
-            await db.delete(obj)
-            await db.commit()
-            return obj
-        return None
+            if obj:
+                # Si el objeto existe, lo elimina
+                await db.delete(obj)
+                await db.commit()
+                return obj
+            # Si no se encuentra, podrías lanzar NotFoundError aquí o manejarlo en el router
+            return None # Devolver None si no se encuentra es consistente con el tipo de retorno
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error deleting record with ID {id} from {self.model.__tablename__}: {str(e)}") from e
+
 
     async def count(self, db: AsyncSession) -> int:
         """
@@ -168,7 +202,10 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         Returns:
             int: El número total de registros.
         """
-        # Crea una consulta para contar los registros
-        result = await db.execute(select(func.count(self.model.id)))
-        return result.scalar_one()
+        try:
+            # Crea una consulta para contar los registros
+            result = await db.execute(select(func.count(self.model.id)))
+            return result.scalar_one()
+        except Exception as e:
+            raise CRUDException(f"Error counting records in {self.model.__tablename__}: {str(e)}") from e
 

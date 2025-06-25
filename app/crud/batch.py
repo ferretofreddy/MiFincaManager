@@ -1,5 +1,5 @@
 # app/crud/batch.py
-from typing import Optional, List
+from typing import Optional, List, Dict, Any # Añadido Dict, Any
 import uuid
 from datetime import datetime
 
@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, joinedload
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
+
 
 # Importa el modelo Batch y los esquemas
 from app.models.batch import Batch
@@ -20,7 +22,7 @@ from app.schemas.animal_batch_pivot import AnimalBatchPivotCreate
 
 # Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
-from app.crud.exceptions import NotFoundError, CRUDException
+from app.crud.exceptions import NotFoundError, CRUDException, AlreadyExistsError # Añadido AlreadyExistsError
 
 class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
     """
@@ -58,14 +60,14 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
         """
         Remueve asociaciones entre un lote y una lista de animales.
         """
+        from sqlalchemy import delete # Importar delete aquí para evitar importación circular con crud.__init__
         for animal_id in animal_ids_to_remove:
             await db.execute(
-                select(AnimalBatchPivot)
-                .filter(and_(
+                delete(AnimalBatchPivot) # Usar delete directamente en la tabla
+                .where(
                     AnimalBatchPivot.animal_id == animal_id,
                     AnimalBatchPivot.batch_event_id == batch_event_id
-                ))
-                .delete()
+                )
             )
         await db.flush()
 
@@ -76,15 +78,17 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
         """
         try:
             # 1. Validar batch_type_id como MasterData
-            batch_type_md = await db.execute(select(MasterData).filter(MasterData.id == obj_in.batch_type_id))
-            batch_type_md = batch_type_md.scalar_one_or_none()
+            batch_type_md_q = await db.execute(select(MasterData).filter(MasterData.id == obj_in.batch_type_id))
+            batch_type_md = batch_type_md_q.scalar_one_or_none()
             if not batch_type_md:
-                raise CRUDException(f"MasterData with ID {obj_in.batch_type_id} for batch type not found.")
+                raise NotFoundError(f"MasterData with ID {obj_in.batch_type_id} for batch type not found.")
             # Puedes añadir una validación de categoría si 'batch_type' debe ser de una categoría específica.
+            # if batch_type_md.category != "batch_type_category":
+            #     raise CRUDException("Invalid category for batch_type_id.")
 
             # 2. Validar farm_id
-            farm = await db.execute(select(Farm).filter(Farm.id == obj_in.farm_id))
-            if not farm.scalar_one_or_none():
+            farm_q = await db.execute(select(Farm).filter(Farm.id == obj_in.farm_id))
+            if not farm_q.scalar_one_or_none():
                 raise NotFoundError(f"Farm with ID {obj_in.farm_id} not found.")
 
             # Crear el lote principal
@@ -97,8 +101,8 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
             if obj_in.animal_ids:
                 # Validar que los animales existen
                 for animal_id in obj_in.animal_ids:
-                    existing_animal = await db.execute(select(Animal).filter(Animal.id == animal_id))
-                    if not existing_animal.scalar_one_or_none():
+                    existing_animal_q = await db.execute(select(Animal).filter(Animal.id == animal_id))
+                    if not existing_animal_q.scalar_one_or_none():
                         raise NotFoundError(f"Animal with ID {animal_id} not found. Cannot associate with batch.")
                 
                 await self._add_animal_associations(db, db_batch.id, obj_in.animal_ids)
@@ -118,13 +122,16 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
                 .filter(Batch.id == db_batch.id)
             )
             return result.scalar_one_or_none()
+        except DBIntegrityError as e: # Captura errores de integridad de la DB
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear Batch: {e}") from e
         except Exception as e:
             await db.rollback()
-            if isinstance(e, NotFoundError) or isinstance(e, CRUDException):
+            if isinstance(e, NotFoundError) or isinstance(e, AlreadyExistsError): # Asegúrate de propagar las excepciones CRUD que ya manejas
                 raise e
             raise CRUDException(f"Error creating Batch: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, batch_id: uuid.UUID) -> Optional[Batch]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[Batch]: # Cambiado batch_id a id
         """
         Obtiene un lote por su ID, cargando las relaciones.
         """
@@ -136,7 +143,7 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
                 selectinload(self.model.created_by_user),
                 selectinload(self.model.animal_batches).selectinload(AnimalBatchPivot.animal)
             )
-            .filter(self.model.id == batch_id)
+            .filter(self.model.id == id) # Cambiado batch_id a id
         )
         return result.scalar_one_or_none()
 
@@ -187,14 +194,14 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
         """
         try:
             # Validar claves foráneas si se proporcionan en la actualización
-            if obj_in.batch_type_id is not None:
-                batch_type_md = await db.execute(select(MasterData).filter(MasterData.id == obj_in.batch_type_id))
-                if not batch_type_md.scalar_one_or_none():
-                    raise CRUDException(f"MasterData with ID {obj_in.batch_type_id} for batch type not found.")
+            if obj_in.batch_type_id is not None and obj_in.batch_type_id != db_obj.batch_type_id:
+                batch_type_md_q = await db.execute(select(MasterData).filter(MasterData.id == obj_in.batch_type_id))
+                if not batch_type_md_q.scalar_one_or_none():
+                    raise NotFoundError(f"MasterData with ID {obj_in.batch_type_id} for new batch type not found.")
             
-            if obj_in.farm_id is not None:
-                farm = await db.execute(select(Farm).filter(Farm.id == obj_in.farm_id))
-                if not farm.scalar_one_or_none():
+            if obj_in.farm_id is not None and obj_in.farm_id != db_obj.farm_id:
+                farm_q = await db.execute(select(Farm).filter(Farm.id == obj_in.farm_id))
+                if not farm_q.scalar_one_or_none():
                     raise NotFoundError(f"Farm with ID {obj_in.farm_id} not found.")
 
             # Actualizar campos del lote
@@ -218,8 +225,8 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
                 if animals_to_add:
                     # Validar que los animales existen
                     for animal_id_to_add in animals_to_add:
-                        existing_animal = await db.execute(select(Animal).filter(Animal.id == uuid.UUID(animal_id_to_add)))
-                        if not existing_animal.scalar_one_or_none():
+                        existing_animal_q = await db.execute(select(Animal).filter(Animal.id == uuid.UUID(animal_id_to_add)))
+                        if not existing_animal_q.scalar_one_or_none():
                             raise NotFoundError(f"Animal with ID {animal_id_to_add} not found. Cannot associate with batch.")
                     await self._add_animal_associations(db, db_obj.id, [uuid.UUID(id_str) for id_str in animals_to_add])
                 
@@ -241,15 +248,15 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
                 )
                 .filter(self.model.id == db_obj.id)
             )
-            return result.scalars().first() # Changed to scalars().first()
+            return result.scalars().first()
         except Exception as e:
             await db.rollback()
-            if isinstance(e, NotFoundError) or isinstance(e, CRUDException):
+            if isinstance(e, NotFoundError) or isinstance(e, AlreadyExistsError) or isinstance(e, CRUDException):
                 raise e
             raise CRUDException(f"Error updating Batch: {str(e)}") from e
 
 
-    async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> Batch:
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Batch: # Cambiado delete a remove
         """
         Elimina un lote por su ID.
         Debido a `cascade="all, delete-orphan"` en la relación `animal_batches`,

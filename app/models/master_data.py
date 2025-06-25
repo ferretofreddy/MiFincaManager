@@ -54,8 +54,7 @@ class MasterData(BaseModel): # Hereda de BaseModel
     batches_batch_type: Mapped[List["Batch"]] = relationship("Batch", back_populates="batch_type")
     products_as_type: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.product_type_id]", back_populates="product_type")
     products_as_unit: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.unit_id]", back_populates="unit")
-    
     parameter_data_type: Mapped[List["ConfigurationParameter"]] = relationship(ConfigurationParameter, back_populates="data_type")
 
     # Asegúrate de que las constraints de unicidad o índices compuestos estén aquí
-    # __table_args__ = (UniqueConstraint('category', 'name', name='unique_master_data_name_per_category'),)
+    __table_args__ = (UniqueConstraint('category', 'name', name='unique_master_data_name_per_category'),)

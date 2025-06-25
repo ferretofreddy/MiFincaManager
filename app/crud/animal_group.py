@@ -1,5 +1,5 @@
 # app/crud/animal_group.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any
 import uuid
 from datetime import datetime
 
@@ -7,12 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError as DBIntegrityError
 
-# Importa el modelo AnimalGroup y los esquemas
 from app.models.animal_group import AnimalGroup
 from app.schemas.animal_group import AnimalGroupCreate, AnimalGroupUpdate
 
-# Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
 
@@ -21,27 +20,30 @@ class CRUDAnimalGroup(CRUDBase[AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate
     Clase CRUD específica para el modelo AnimalGroup.
     Gestiona la asociación de animales a grupos.
     """
-
     async def create(self, db: AsyncSession, *, obj_in: AnimalGroupCreate, created_by_user_id: uuid.UUID) -> AnimalGroup:
         """
         Crea una nueva asociación de animal a grupo.
-        Asegura que un animal no pueda tener múltiples asociaciones activas
-        (removed_at is NULL) con el mismo grupo al mismo tiempo si es una restricción.
-        También puedes añadir validaciones para que un animal no esté en más de un grupo activo.
+        Puedes añadir lógica aquí para asegurar que no haya superposiciones de fechas
+        o si un animal no puede estar en múltiples asociaciones activas
+        (removed_at is NULL) con el mismo grupo al mismo tiempo.
         """
-        # Opcional: Verificar si el animal ya tiene una asociación activa con este grupo
-        # o si el animal ya está en *cualquier* grupo activo.
-        # Esto depende de la lógica de negocio. Si un animal solo puede estar en UN grupo activo a la vez:
-        # existing_active_association = await db.execute(
-        #     select(AnimalGroup).filter(
-        #         and_(AnimalGroup.animal_id == obj_in.animal_id, AnimalGroup.removed_at.is_(None))
-        #     )
-        # )
-        # if existing_active_association.scalar_one_or_none():
-        #     raise AlreadyExistsError(f"Animal '{obj_in.animal_id}' is already in an active group.")
+        # Opcional: Verificar si el animal ya tiene una asociación *activa* con este grupo
+        # o si el animal ya está en *cualquier* grupo activo si esa es la regla de negocio.
+        # Si la combinación (animal_id, group_id, removed_at is NULL) debe ser única:
+        existing_active_association = await db.execute(
+            select(AnimalGroup).filter(
+                and_(
+                    AnimalGroup.animal_id == obj_in.animal_id,
+                    AnimalGroup.group_id == obj_in.group_id,
+                    AnimalGroup.removed_at.is_(None)
+                )
+            )
+        )
+        if existing_active_association.scalar_one_or_none():
+            raise AlreadyExistsError(f"Animal '{obj_in.animal_id}' is already in an active association with group '{obj_in.group_id}'.")
 
         try:
-            # Si assigned_at no se proporciona en obj_in, se usa el default_factory
+            # Si assigned_at no se proporciona en obj_in, se usa el default_factory del modelo
             db_obj = self.model(**obj_in.model_dump(), created_by_user_id=created_by_user_id)
             db.add(db_obj)
             await db.commit()
@@ -55,14 +57,17 @@ class CRUDAnimalGroup(CRUDBase[AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate
                     selectinload(AnimalGroup.grupo),
                     selectinload(AnimalGroup.created_by_user)
                 )
-                .filter(AnimalGroup.id == db_obj.id) # Usamos el ID de la BaseModel
+                .filter(AnimalGroup.id == db_obj.id)
             )
             return result.scalar_one_or_none()
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear AnimalGroup: {e}") from e
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating AnimalGroup: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, animal_group_id: uuid.UUID) -> Optional[AnimalGroup]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[AnimalGroup]:
         """
         Obtiene una asociación AnimalGroup por su ID, cargando las relaciones.
         """
@@ -73,7 +78,7 @@ class CRUDAnimalGroup(CRUDBase[AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate
                 selectinload(self.model.grupo),
                 selectinload(self.model.created_by_user)
             )
-            .filter(self.model.id == animal_group_id)
+            .filter(self.model.id == id)
         )
         return result.scalar_one_or_none()
 
@@ -133,24 +138,51 @@ class CRUDAnimalGroup(CRUDBase[AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate
         )
         return result.scalars().all()
 
-    async def update(self, db: AsyncSession, *, db_obj: AnimalGroup, obj_in: AnimalGroupUpdate) -> AnimalGroup:
+    async def update(self, db: AsyncSession, *, db_obj: AnimalGroup, obj_in: Union[AnimalGroupUpdate, Dict[str, Any]]) -> AnimalGroup:
         """
         Actualiza una asociación AnimalGroup existente.
         Se usa principalmente para establecer 'removed_at'.
         """
-        updated_animal_group = await super().update(db, db_obj=db_obj, obj_in=obj_in)
-        if updated_animal_group:
-            result = await db.execute(
-                select(self.model)
-                .options(
-                    selectinload(self.model.animal),
-                    selectinload(self.model.grupo),
-                    selectinload(self.model.created_by_user)
+        try:
+            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
+
+            updated_animal_group = await super().update(db, db_obj=db_obj, obj_in=update_data)
+            if updated_animal_group:
+                result = await db.execute(
+                    select(self.model)
+                    .options(
+                        selectinload(self.model.animal),
+                        selectinload(self.model.grupo),
+                        selectinload(self.model.created_by_user)
+                    )
+                    .filter(self.model.id == updated_animal_group.id)
                 )
-                .filter(self.model.id == updated_animal_group.id)
-            )
-            return result.scalars().first() # Changed to scalars().first()
-        return updated_animal_group
+                return result.scalars().first()
+            return updated_animal_group
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error updating AnimalGroup: {str(e)}") from e
+
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[AnimalGroup]:
+        """
+        Elimina una asociación AnimalGroup por su ID.
+        """
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            raise NotFoundError(f"AnimalGroup association with id {id} not found.")
+        
+        try:
+            await db.delete(db_obj)
+            await db.commit()
+            return db_obj
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error deleting AnimalGroup association: {str(e)}") from e
+
 
 # Crea una instancia de CRUDAnimalGroup que se puede importar y usar en los routers
 animal_group = CRUDAnimalGroup(AnimalGroup)

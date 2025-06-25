@@ -1,5 +1,5 @@
 # app/crud/feedings.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -7,7 +7,9 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload, joinedload
-from sqlalchemy import and_
+from sqlalchemy import and_, delete # Importado delete para el _remove_animal_associations
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
+
 
 # Importa el modelo Feeding y los esquemas
 from app.models.feeding import Feeding
@@ -20,7 +22,7 @@ from app.schemas.animal_feeding_pivot import AnimalFeedingPivotCreate # Aunque n
 
 # Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
-from app.crud.exceptions import NotFoundError, CRUDException
+from app.crud.exceptions import NotFoundError, CRUDException, AlreadyExistsError # Añadido AlreadyExistsError
 
 class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
     """
@@ -61,10 +63,11 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
         # SQLAlchemy 2.0+ recomienda delete() con synchronize_session=False para eliminar múltiples
         # Si tienes problemas, podrías iterar y eliminar individualmente, pero esta es la forma performante.
         await db.execute(
-            AnimalFeedingPivot.__table__.delete().where(
+            delete(AnimalFeedingPivot) # Usar delete directamente en la tabla
+            .where(
                 and_(
                     AnimalFeedingPivot.feeding_event_id == feeding_event_id,
-                    AnimalFeedingPivot.animal_id.in_([uuid.UUID(id_str) for id_str in animal_ids_to_remove]) # Asegurarse que animal_ids_to_remove es una lista de UUIDs
+                    AnimalFeedingPivot.animal_id.in_(animal_ids_to_remove) # animal_ids_to_remove ya es una lista de UUIDs
                 )
             )
         )
@@ -76,17 +79,21 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
         """
         try:
             # 1. Validar feed_type_id y unit_id como MasterData
-            feed_type_md = await db.execute(select(MasterData).filter(MasterData.id == obj_in.feed_type_id))
-            feed_type_md = feed_type_md.scalar_one_or_none()
+            feed_type_md_q = await db.execute(select(MasterData).filter(MasterData.id == obj_in.feed_type_id))
+            feed_type_md = feed_type_md_q.scalar_one_or_none()
             if not feed_type_md:
-                raise CRUDException(f"MasterData with ID {obj_in.feed_type_id} for feed type not found.")
+                raise NotFoundError(f"MasterData with ID {obj_in.feed_type_id} for feed type not found.")
             # Puedes añadir una validación de categoría si 'feed_type' debe ser de una categoría específica.
+            # if feed_type_md.category != "feed_type_category":
+            #     raise CRUDException("Invalid category for feed_type_id.")
 
-            unit_md = await db.execute(select(MasterData).filter(MasterData.id == obj_in.unit_id))
-            unit_md = unit_md.scalar_one_or_none()
+            unit_md_q = await db.execute(select(MasterData).filter(MasterData.id == obj_in.unit_id))
+            unit_md = unit_md_q.scalar_one_or_none()
             if not unit_md:
-                raise CRUDException(f"MasterData with ID {obj_in.unit_id} for unit not found.")
+                raise NotFoundError(f"MasterData with ID {obj_in.unit_id} for unit not found.")
             # Puedes añadir una validación de categoría si 'unit' debe ser de una categoría específica.
+            # if unit_md.category != "unit_category":
+            #     raise CRUDException("Invalid category for unit_id.")
 
             # Crear el evento de alimentación principal
             feeding_data = obj_in.model_dump(exclude={"animal_ids"})
@@ -98,8 +105,8 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
             if obj_in.animal_ids:
                 # Validar que los animales existen
                 for animal_id in obj_in.animal_ids:
-                    existing_animal = await db.execute(select(Animal).filter(Animal.id == animal_id))
-                    if not existing_animal.scalar_one_or_none():
+                    existing_animal_q = await db.execute(select(Animal).filter(Animal.id == animal_id))
+                    if not existing_animal_q.scalar_one_or_none():
                         raise NotFoundError(f"Animal with ID {animal_id} not found. Cannot associate with feeding event.")
                 
                 await self._add_animal_associations(db, db_feeding.id, obj_in.animal_ids)
@@ -119,14 +126,17 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 .filter(Feeding.id == db_feeding.id)
             )
             return result.scalars().first() # Usar first() para consistencia
+        except DBIntegrityError as e: # Captura errores de integridad de la DB
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear Feeding event: {e}") from e
         except Exception as e:
             await db.rollback()
             # Si es un NotFoundError que lanzamos, relanzarlo. Si es otro error, envolverlo.
-            if isinstance(e, NotFoundError):
+            if isinstance(e, NotFoundError) or isinstance(e, AlreadyExistsError):
                 raise e
             raise CRUDException(f"Error creating Feeding event: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, feeding_id: uuid.UUID) -> Optional[Feeding]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[Feeding]: # Cambiado feeding_id a id
         """
         Obtiene un evento de alimentación por su ID, cargando las relaciones.
         """
@@ -138,7 +148,7 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 selectinload(self.model.recorded_by_user),
                 selectinload(self.model.animal_feedings).selectinload(AnimalFeedingPivot.animal)
             )
-            .filter(self.model.id == feeding_id)
+            .filter(self.model.id == id) # Cambiado feeding_id a id
         )
         return result.scalars().first() # Usar first() para consistencia
 
@@ -163,13 +173,29 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
         )
         return result.scalars().unique().all() # .unique() para evitar duplicados si un animal está en varios pivotes
 
-    async def update(self, db: AsyncSession, *, db_obj: Feeding, obj_in: FeedingUpdate) -> Feeding:
+    async def update(self, db: AsyncSession, *, db_obj: Feeding, obj_in: Union[FeedingUpdate, Dict[str, Any]]) -> Feeding: # Añadido Union, Dict, Any
         """
         Actualiza un evento de alimentación existente y sus asociaciones con animales.
         """
         try:
+            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True, exclude={"animal_ids"})
+            
+            # Validar claves foráneas si se proporcionan en la actualización
+            if "feed_type_id" in update_data and update_data["feed_type_id"] != db_obj.feed_type_id:
+                feed_type_md_q = await db.execute(select(MasterData).filter(MasterData.id == update_data["feed_type_id"]))
+                if not feed_type_md_q.scalar_one_or_none():
+                    raise NotFoundError(f"MasterData with ID {update_data['feed_type_id']} for new feed type not found.")
+            
+            if "unit_id" in update_data and update_data["unit_id"] != db_obj.unit_id:
+                unit_md_q = await db.execute(select(MasterData).filter(MasterData.id == update_data["unit_id"]))
+                if not unit_md_q.scalar_one_or_none():
+                    raise NotFoundError(f"MasterData with ID {update_data['unit_id']} for new unit not found.")
+
             # Actualizar campos del evento de alimentación
-            update_data = obj_in.model_dump(exclude_unset=True, exclude={"animal_ids"})
             for field, value in update_data.items():
                 setattr(db_obj, field, value)
             
@@ -189,8 +215,8 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 if animals_to_add:
                     # Validar que los animales existen
                     for animal_id_to_add in animals_to_add:
-                        existing_animal = await db.execute(select(Animal).filter(Animal.id == uuid.UUID(animal_id_to_add)))
-                        if not existing_animal.scalar_one_or_none():
+                        existing_animal_q = await db.execute(select(Animal).filter(Animal.id == uuid.UUID(animal_id_to_add)))
+                        if not existing_animal_q.scalar_one_or_none():
                             raise NotFoundError(f"Animal with ID {animal_id_to_add} not found. Cannot associate with feeding event.")
                     await self._add_animal_associations(db, db_obj.id, [uuid.UUID(id_str) for id_str in animals_to_add])
                 
@@ -212,16 +238,15 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 )
                 .filter(self.model.id == db_obj.id)
             )
-            # Cambiado a scalars().first()
             return result.scalars().first()
         except Exception as e:
             await db.rollback()
-            if isinstance(e, NotFoundError):
+            if isinstance(e, NotFoundError) or isinstance(e, AlreadyExistsError) or isinstance(e, CRUDException):
                 raise e
             raise CRUDException(f"Error updating Feeding event: {str(e)}") from e
 
 
-    async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> Feeding:
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Feeding: # Cambiado delete a remove
         """
         Elimina un evento de alimentación por su ID.
         Debido a `cascade="all, delete-orphan"` en la relación `animal_feedings`,

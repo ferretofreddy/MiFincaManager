@@ -1,17 +1,21 @@
 # app/crud/user_roles.py 
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
 
 # Importa el modelo UserRole y los esquemas
 from app.models.user_role import UserRole
 from app.schemas.user_role import UserRoleCreate
-# No usaremos CRUDBase aquí ya que las operaciones son muy específicas.
-# from app.crud.base import CRUDBase 
+
+# Importa los modelos necesarios para validación (User y Role)
+from app.models.user import User
+from app.models.role import Role
+
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
 
 class CRUDUserRole:
@@ -38,29 +42,48 @@ class CRUDUserRole:
         )
         return result.scalar_one_or_none()
 
-    async def assign_role_to_user(self, db: AsyncSession, user_id: uuid.UUID, role_id: uuid.UUID, assigned_by_user_id: Optional[uuid.UUID] = None) -> UserRole:
+    async def assign_role_to_user(self, db: AsyncSession, user_id: uuid.UUID, role_id: uuid.UUID, assigned_by_user_id: uuid.UUID) -> UserRole:
         """
         Asigna un rol a un usuario.
         Verifica si la asociación ya existe antes de crearla.
         """
+        # Validar que el user_id, role_id y assigned_by_user_id existen
+        user_exists_q = await db.execute(select(User).filter(User.id == user_id))
+        if not user_exists_q.scalar_one_or_none():
+            raise NotFoundError(f"User with ID {user_id} not found.")
+
+        role_exists_q = await db.execute(select(Role).filter(Role.id == role_id))
+        if not role_exists_q.scalar_one_or_none():
+            raise NotFoundError(f"Role with ID {role_id} not found.")
+        
+        assigned_by_user_exists_q = await db.execute(select(User).filter(User.id == assigned_by_user_id))
+        if not assigned_by_user_exists_q.scalar_one_or_none():
+            raise NotFoundError(f"Assigned by user with ID {assigned_by_user_id} not found.")
+
         existing_association = await self.get(db, user_id, role_id)
         if existing_association:
             raise AlreadyExistsError(f"Role {role_id} is already assigned to user {user_id}.")
 
         try:
+            # Crea una instancia del modelo UserRole
             db_obj = self.model(user_id=user_id, role_id=role_id, assigned_by_user_id=assigned_by_user_id)
             db.add(db_obj)
             await db.commit()
             await db.refresh(db_obj) # Recarga para obtener assigned_at
 
-            # Opcional: recargar con relaciones si la respuesta necesita más detalles
+            # Recargar con relaciones si la respuesta necesita más detalles
             reloaded_obj = await self.get(db, user_id, role_id)
             return reloaded_obj if reloaded_obj else db_obj
 
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al asignar rol {role_id} a usuario {user_id}: {e}") from e
         except Exception as e:
             await db.rollback()
+            if isinstance(e, (NotFoundError, AlreadyExistsError)):
+                raise e
             raise CRUDException(f"Error assigning role {role_id} to user {user_id}: {str(e)}") from e
-
+    
     async def remove_role_from_user(self, db: AsyncSession, user_id: uuid.UUID, role_id: uuid.UUID):
         """
         Remueve un rol de un usuario.

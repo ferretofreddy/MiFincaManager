@@ -1,14 +1,16 @@
 # app/crud/permission.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_ # Importa 'and_' para combinaciones de filtros
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
 
 # Importa el modelo Permission y los esquemas de permission
 from app.models.permission import Permission
+from app.models.module import Module # Importado para validación
 from app.schemas.permission import PermissionCreate, PermissionUpdate
 
 # Importa la CRUDBase y las excepciones
@@ -46,6 +48,12 @@ class CRUDPermission(CRUDBase[Permission, PermissionCreate, PermissionUpdate]):
             raise AlreadyExistsError(f"Permission with name '{obj_in.name}' already exists.")
 
         try:
+            # Validar module_id si se proporciona
+            if obj_in.module_id:
+                module_exists_q = await db.execute(select(Module).filter(Module.id == obj_in.module_id))
+                if not module_exists_q.scalar_one_or_none():
+                    raise NotFoundError(f"Module with ID {obj_in.module_id} not found.")
+
             db_obj = self.model(**obj_in.model_dump())
             db.add(db_obj)
             await db.commit()
@@ -60,12 +68,17 @@ class CRUDPermission(CRUDBase[Permission, PermissionCreate, PermissionUpdate]):
                 )
                 .filter(Permission.id == db_obj.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first()
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear Permission: {e}") from e
         except Exception as e:
             await db.rollback()
+            if isinstance(e, (NotFoundError, AlreadyExistsError)):
+                raise e
             raise CRUDException(f"Error creating Permission: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, permission_id: uuid.UUID) -> Optional[Permission]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[Permission]: # Cambiado permission_id a id
         """
         Obtiene un permiso por su ID, cargando la relación con el módulo y los roles.
         """
@@ -75,7 +88,7 @@ class CRUDPermission(CRUDBase[Permission, PermissionCreate, PermissionUpdate]):
                 selectinload(self.model.module),
                 selectinload(self.model.roles)
             )
-            .filter(self.model.id == permission_id)
+            .filter(self.model.id == id) # Cambiado permission_id a id
         )
         return result.scalar_one_or_none()
     
@@ -110,24 +123,63 @@ class CRUDPermission(CRUDBase[Permission, PermissionCreate, PermissionUpdate]):
         )
         return result.scalars().all()
 
-    async def update(self, db: AsyncSession, *, db_obj: Permission, obj_in: PermissionUpdate) -> Permission:
+    async def update(self, db: AsyncSession, *, db_obj: Permission, obj_in: Union[PermissionUpdate, Dict[str, Any]]) -> Permission: # Añadido Union, Dict, Any
         """
         Actualiza un permiso existente.
         Después de la actualización, recarga el objeto con las relaciones necesarias.
         """
-        updated_permission = await super().update(db, db_obj=db_obj, obj_in=obj_in)
-        if updated_permission:
-            result = await db.execute(
-                select(self.model)
-                .options(
-                    selectinload(self.model.module),
-                    selectinload(self.model.roles)
+        try:
+            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
+
+            # Si el nombre se está actualizando, verifica unicidad
+            if "name" in update_data and update_data["name"] != db_obj.name:
+                existing_permission = await self.get_by_name(db, name=update_data["name"])
+                if existing_permission and existing_permission.id != db_obj.id:
+                    raise AlreadyExistsError(f"Permission with name '{update_data['name']}' already exists.")
+            
+            # Si se intenta cambiar el module_id, valida que el nuevo módulo exista
+            if "module_id" in update_data and update_data["module_id"] != db_obj.module_id:
+                module_exists_q = await db.execute(select(Module).filter(Module.id == update_data["module_id"]))
+                if not module_exists_q.scalar_one_or_none():
+                    raise NotFoundError(f"Module with ID {update_data['module_id']} not found.")
+
+            updated_permission = await super().update(db, db_obj=db_obj, obj_in=update_data)
+            if updated_permission:
+                result = await db.execute(
+                    select(self.model)
+                    .options(
+                        selectinload(self.model.module),
+                        selectinload(self.model.roles)
+                    )
+                    .filter(self.model.id == updated_permission.id)
                 )
-                .filter(self.model.id == updated_permission.id)
-            )
-            # Cambiado a scalars().first()
-            return result.scalars().first()
-        return updated_permission
+                return result.scalars().first()
+            return updated_permission
+        except Exception as e:
+            await db.rollback()
+            if isinstance(e, (NotFoundError, AlreadyExistsError, CRUDException)):
+                raise e
+            raise CRUDException(f"Error updating Permission: {str(e)}") from e
+
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[Permission]: # Cambiado delete a remove
+        """
+        Elimina un permiso por su ID.
+        """
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            raise NotFoundError(f"Permission with id {id} not found.")
+        
+        try:
+            await db.delete(db_obj)
+            await db.commit()
+            return db_obj
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error deleting Permission: {str(e)}") from e
 
 # Crea una instancia de CRUDPermission que se puede importar y usar en los routers
 permission = CRUDPermission(Permission)

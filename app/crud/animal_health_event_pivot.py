@@ -1,5 +1,5 @@
 # app/crud/animal_health_event_pivot.py 
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any
 import uuid
 from datetime import datetime
 
@@ -7,15 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError as DBIntegrityError
 
-# Importa el modelo AnimalHealthEventPivot y los esquemas
 from app.models.animal_health_event_pivot import AnimalHealthEventPivot
-from app.schemas.animal_health_event_pivot import AnimalHealthEventPivotCreate # No hay update usualmente para pivotes simples
+from app.schemas.animal_health_event_pivot import AnimalHealthEventPivotCreate
 
-# Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
 
+# Nota: AnimalHealthEventPivotCreate es el CreateSchemaType. Como no hay un esquema Update,
+# usamos 'None' para UpdateSchemaType en CRUDBase.
 class CRUDAnimalHealthEventPivot(CRUDBase[AnimalHealthEventPivot, AnimalHealthEventPivotCreate, None]):
     """
     Clase CRUD específica para el modelo AnimalHealthEventPivot.
@@ -23,11 +24,16 @@ class CRUDAnimalHealthEventPivot(CRUDBase[AnimalHealthEventPivot, AnimalHealthEv
     No se usa un 'UpdateSchemaType' ya que las entradas de pivote rara vez se "actualizan" en el sentido tradicional,
     sino que se crean o eliminan.
     """
-
     async def create(self, db: AsyncSession, *, obj_in: AnimalHealthEventPivotCreate) -> AnimalHealthEventPivot:
         """
         Crea una nueva asociación entre un animal y un evento de salud.
+        Verifica si la asociación ya existe.
         """
+        # Verificar si la asociación ya existe
+        existing_association = await self.get_by_animal_and_event_id(db, obj_in.animal_id, obj_in.health_event_id)
+        if existing_association:
+            raise AlreadyExistsError(f"Animal {obj_in.animal_id} is already associated with Health Event {obj_in.health_event_id}.")
+
         try:
             db_obj = self.model(**obj_in.model_dump())
             db.add(db_obj)
@@ -44,11 +50,14 @@ class CRUDAnimalHealthEventPivot(CRUDBase[AnimalHealthEventPivot, AnimalHealthEv
                 .filter(AnimalHealthEventPivot.id == db_obj.id)
             )
             return result.scalar_one_or_none()
+        except DBIntegrityError as e: # Captura errores de integridad de la DB
+            await db.rollback()
+            raise AlreadyExistsError(f"Association for animal {obj_in.animal_id} and health event {obj_in.health_event_id} already exists.") from e
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating AnimalHealthEventPivot: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, pivot_id: uuid.UUID) -> Optional[AnimalHealthEventPivot]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[AnimalHealthEventPivot]:
         """
         Obtiene una asociación pivot por su ID, cargando las relaciones.
         """
@@ -58,7 +67,7 @@ class CRUDAnimalHealthEventPivot(CRUDBase[AnimalHealthEventPivot, AnimalHealthEv
                 selectinload(self.model.animal),
                 selectinload(self.model.health_event)
             )
-            .filter(self.model.id == pivot_id)
+            .filter(self.model.id == id)
         )
         return result.scalar_one_or_none()
 
@@ -113,7 +122,7 @@ class CRUDAnimalHealthEventPivot(CRUDBase[AnimalHealthEventPivot, AnimalHealthEv
         )
         return result.scalars().all()
 
-    async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> AnimalHealthEventPivot:
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[AnimalHealthEventPivot]:
         """
         Elimina una asociación pivot por su ID.
         """

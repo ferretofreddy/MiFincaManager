@@ -8,19 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import and_
+from sqlalchemy.exc import IntegrityError as DBIntegrityError
 
-# Importa el modelo AnimalFeedingPivot y los esquemas
 from app.models.animal_feeding_pivot import AnimalFeedingPivot
 from app.schemas.animal_feeding_pivot import AnimalFeedingPivotCreate
 
-# Importa la CRUDBase y las excepciones
-# Nota: AnimalFeedingPivot no tiene un 'id' único como PK, así que su CRUD
-# será ligeramente diferente de CRUDBase si usa métodos como get(id).
-# Sin embargo, para mantener la estructura, podemos adaptar CRUDBase o crear uno más simple.
-# Para este caso, vamos a crear métodos específicos sin usar la herencia directa de CRUDBase
-# para 'get' o 'delete' por ID simple, ya que su PK es compuesta.
-
-from app.crud.exceptions import NotFoundError, CRUDException
+from app.crud.exceptions import NotFoundError, CRUDException, AlreadyExistsError
 
 class CRUDAnimalFeedingPivot:
     """
@@ -34,7 +27,13 @@ class CRUDAnimalFeedingPivot:
     async def create(self, db: AsyncSession, *, obj_in: AnimalFeedingPivotCreate) -> AnimalFeedingPivot:
         """
         Crea una nueva asociación en la tabla pivote AnimalFeedingPivot.
+        Verifica si la asociación ya existe antes de crearla.
         """
+        # Verificar si la asociación ya existe
+        existing_association = await self.get(db, obj_in.animal_id, obj_in.feeding_event_id)
+        if existing_association:
+            raise AlreadyExistsError(f"Animal {obj_in.animal_id} is already associated with Feeding Event {obj_in.feeding_event_id}.")
+
         try:
             db_pivot = self.model(**obj_in.model_dump())
             db.add(db_pivot)
@@ -43,6 +42,9 @@ class CRUDAnimalFeedingPivot:
             # Recargar con relaciones para la respuesta si se desea un objeto completo
             reloaded_obj = await self.get(db, db_pivot.animal_id, db_pivot.feeding_event_id)
             return reloaded_obj if reloaded_obj else db_pivot
+        except DBIntegrityError as e: # Captura errores de integridad de la DB
+            await db.rollback()
+            raise AlreadyExistsError(f"Association for animal {obj_in.animal_id} and feeding event {obj_in.feeding_event_id} already exists.") from e
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating AnimalFeedingPivot record: {str(e)}") from e
@@ -96,7 +98,7 @@ class CRUDAnimalFeedingPivot:
         )
         return result.scalars().all()
 
-    async def delete(self, db: AsyncSession, animal_id: uuid.UUID, feeding_event_id: uuid.UUID) -> AnimalFeedingPivot:
+    async def remove(self, db: AsyncSession, animal_id: uuid.UUID, feeding_event_id: uuid.UUID) -> AnimalFeedingPivot:
         """
         Elimina una asociación de pivote específica por sus IDs compuestos.
         """

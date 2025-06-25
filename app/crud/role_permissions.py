@@ -1,17 +1,21 @@
 # app/crud/role_permissions.py 
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
 
 # Importa el modelo RolePermission y los esquemas
 from app.models.role_permission import RolePermission
 from app.schemas.role_permission import RolePermissionCreate
-# No usaremos CRUDBase aquí ya que las operaciones son muy específicas.
-# from app.crud.base import CRUDBase 
+
+# Importa los modelos necesarios para validación (Role y Permission)
+from app.models.role import Role
+from app.models.permission import Permission
+
 from app.crud.exceptions import NotFoundError, AlreadyExistsError, CRUDException
 
 class CRUDRolePermission:
@@ -42,6 +46,15 @@ class CRUDRolePermission:
         Asigna un permiso a un rol.
         Verifica si la asociación ya existe antes de crearla.
         """
+        # Validar que el role_id y permission_id existen
+        role_exists_q = await db.execute(select(Role).filter(Role.id == role_id))
+        if not role_exists_q.scalar_one_or_none():
+            raise NotFoundError(f"Role with ID {role_id} not found.")
+        
+        permission_exists_q = await db.execute(select(Permission).filter(Permission.id == permission_id))
+        if not permission_exists_q.scalar_one_or_none():
+            raise NotFoundError(f"Permission with ID {permission_id} not found.")
+
         existing_association = await self.get(db, role_id, permission_id)
         if existing_association:
             raise AlreadyExistsError(f"Permission {permission_id} is already assigned to role {role_id}.")
@@ -53,12 +66,17 @@ class CRUDRolePermission:
             await db.commit()
             await db.refresh(db_obj) # Recarga para obtener assigned_at
 
-            # Opcional: recargar con relaciones si la respuesta necesita más detalles
+            # Recargar con relaciones si la respuesta necesita más detalles
             reloaded_obj = await self.get(db, role_id, permission_id)
             return reloaded_obj if reloaded_obj else db_obj
 
+        except DBIntegrityError as e:
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al asignar permiso {permission_id} a rol {role_id}: {e}") from e
         except Exception as e:
             await db.rollback()
+            if isinstance(e, (NotFoundError, AlreadyExistsError)):
+                raise e
             raise CRUDException(f"Error assigning permission {permission_id} to role {role_id}: {str(e)}") from e
 
     async def remove_permission_from_role(self, db: AsyncSession, role_id: uuid.UUID, permission_id: uuid.UUID):

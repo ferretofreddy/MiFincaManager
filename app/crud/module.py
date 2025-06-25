@@ -1,10 +1,12 @@
 # app/crud/module.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
+
+from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
 
 # Importa el modelo Module y los esquemas de module
 from app.models.module import Module
@@ -58,11 +60,16 @@ class CRUDModule(CRUDBase[Module, ModuleCreate, ModuleUpdate]):
                 .filter(Module.id == db_obj.id)
             )
             return result.scalar_one_or_none()
+        except DBIntegrityError as e: # Captura errores de integridad de la DB
+            await db.rollback()
+            raise AlreadyExistsError(f"Error de integridad al crear Module: {e}") from e
         except Exception as e:
             await db.rollback()
+            if isinstance(e, AlreadyExistsError):
+                raise e
             raise CRUDException(f"Error creating Module: {str(e)}") from e
 
-    async def get(self, db: AsyncSession, module_id: uuid.UUID) -> Optional[Module]:
+    async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[Module]: # Cambiado module_id a id
         """
         Obtiene un módulo por su ID, cargando la relación con los permisos.
         """
@@ -71,7 +78,7 @@ class CRUDModule(CRUDBase[Module, ModuleCreate, ModuleUpdate]):
             .options(
                 selectinload(self.model.permissions)
             )
-            .filter(self.model.id == module_id)
+            .filter(self.model.id == id) # Cambiado module_id a id
         )
         return result.scalar_one_or_none()
     
@@ -89,23 +96,56 @@ class CRUDModule(CRUDBase[Module, ModuleCreate, ModuleUpdate]):
         )
         return result.scalars().all()
 
-    async def update(self, db: AsyncSession, *, db_obj: Module, obj_in: ModuleUpdate) -> Module:
+    async def update(self, db: AsyncSession, *, db_obj: Module, obj_in: Union[ModuleUpdate, Dict[str, Any]]) -> Module: # Añadido Union, Dict, Any
         """
         Actualiza un módulo existente.
         Después de la actualización, recarga el objeto con las relaciones necesarias.
         """
-        updated_module = await super().update(db, db_obj=db_obj, obj_in=obj_in)
-        if updated_module:
-            result = await db.execute(
-                select(self.model)
-                .options(
-                    selectinload(self.model.permissions)
+        try:
+            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
+            if isinstance(obj_in, dict):
+                update_data = obj_in
+            else:
+                update_data = obj_in.model_dump(exclude_unset=True)
+
+            # Si el nombre se está actualizando, verifica unicidad
+            if "name" in update_data and update_data["name"] != db_obj.name:
+                existing_module = await self.get_by_name(db, name=update_data["name"])
+                if existing_module and existing_module.id != db_obj.id:
+                    raise AlreadyExistsError(f"Module with name '{update_data['name']}' already exists.")
+
+            updated_module = await super().update(db, db_obj=db_obj, obj_in=update_data)
+            if updated_module:
+                result = await db.execute(
+                    select(self.model)
+                    .options(
+                        selectinload(self.model.permissions)
+                    )
+                    .filter(self.model.id == updated_module.id)
                 )
-                .filter(self.model.id == updated_module.id)
-            )
-            # Cambiado a scalars().first()
-            return result.scalars().first()
-        return updated_module
+                return result.scalars().first()
+            return updated_module
+        except Exception as e:
+            await db.rollback()
+            if isinstance(e, NotFoundError) or isinstance(e, AlreadyExistsError) or isinstance(e, CRUDException):
+                raise e
+            raise CRUDException(f"Error updating Module: {str(e)}") from e
+
+    async def remove(self, db: AsyncSession, *, id: uuid.UUID) -> Optional[Module]: # Cambiado delete a remove
+        """
+        Elimina un módulo por su ID.
+        """
+        db_obj = await self.get(db, id)
+        if not db_obj:
+            raise NotFoundError(f"Module with id {id} not found.")
+        
+        try:
+            await db.delete(db_obj)
+            await db.commit()
+            return db_obj
+        except Exception as e:
+            await db.rollback()
+            raise CRUDException(f"Error deleting Module: {str(e)}") from e
 
 # Crea una instancia de CRUDModule que se puede importar y usar en los routers
 module = CRUDModule(Module)
