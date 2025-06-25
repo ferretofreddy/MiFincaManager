@@ -113,7 +113,8 @@ class CRUDMasterData(CRUDBase[MasterData, MasterDataCreate, MasterDataUpdate]):
                 .options(selectinload(self.model.created_by_user))
                 .filter(self.model.id == updated_master_data.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_master_data
 
 # Crea una instancia de CRUDMasterData que se puede importar y usar en los routers

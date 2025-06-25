@@ -10,6 +10,9 @@ from sqlalchemy import and_
 
 # Importa el modelo OffspringBorn y los esquemas
 from app.models.offspring_born import OffspringBorn
+# Si vas a validar que los IDs existan, también necesitarías importar Animal y ReproductiveEvent
+# from app.models.animal import Animal
+# from app.models.reproductive_event import ReproductiveEvent
 from app.schemas.offspring_born import OffspringBornCreate, OffspringBornUpdate
 
 # Importa la CRUDBase y las excepciones
@@ -27,6 +30,16 @@ class CRUDOffspringBorn(CRUDBase[OffspringBorn, OffspringBornCreate, OffspringBo
         Crea un nuevo registro de cría nacida.
         """
         try:
+            # Opcional: Validar que reproductive_event_id y offspring_animal_id existen
+            # if obj_in.reproductive_event_id:
+            #     reproductive_event_exists = await db.execute(select(ReproductiveEvent).filter(ReproductiveEvent.id == obj_in.reproductive_event_id))
+            #     if not reproductive_event_exists.scalar_one_or_none():
+            #         raise NotFoundError(f"Reproductive event with ID {obj_in.reproductive_event_id} not found.")
+            # if obj_in.offspring_animal_id:
+            #     offspring_animal_exists = await db.execute(select(Animal).filter(Animal.id == obj_in.offspring_animal_id))
+            #     if not offspring_animal_exists.scalar_one_or_none():
+            #         raise NotFoundError(f"Offspring animal with ID {obj_in.offspring_animal_id} not found.")
+
             db_offspring_born = self.model(**obj_in.model_dump(), born_by_user_id=born_by_user_id)
             db.add(db_offspring_born)
             await db.commit()
@@ -42,9 +55,12 @@ class CRUDOffspringBorn(CRUDBase[OffspringBorn, OffspringBornCreate, OffspringBo
                 )
                 .filter(OffspringBorn.id == db_offspring_born.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Usar first() para consistencia
         except Exception as e:
             await db.rollback()
+            # Si es un NotFoundError (de las validaciones opcionales), relanzarlo.
+            if isinstance(e, NotFoundError):
+                raise e
             raise CRUDException(f"Error creating OffspringBorn record: {str(e)}") from e
 
     async def get(self, db: AsyncSession, offspring_born_id: uuid.UUID) -> Optional[OffspringBorn]:
@@ -60,7 +76,7 @@ class CRUDOffspringBorn(CRUDBase[OffspringBorn, OffspringBornCreate, OffspringBo
             )
             .filter(self.model.id == offspring_born_id)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first() # Usar first() para consistencia
 
     async def get_multi_by_reproductive_event_id(self, db: AsyncSession, reproductive_event_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[OffspringBorn]:
         """
@@ -113,7 +129,8 @@ class CRUDOffspringBorn(CRUDBase[OffspringBorn, OffspringBornCreate, OffspringBo
                 )
                 .filter(self.model.id == updated_offspring.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_offspring
 
     async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> OffspringBorn:

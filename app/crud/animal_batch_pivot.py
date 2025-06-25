@@ -33,8 +33,9 @@ class CRUDAnimalBatchPivot:
             db.add(db_pivot)
             await db.commit()
             await db.refresh(db_pivot)
-            # No cargamos relaciones complejas aquí para el pivote, solo sus propios datos
-            return db_pivot
+            # Recargar con relaciones para la respuesta si se desea un objeto completo
+            reloaded_obj = await self.get(db, db_pivot.animal_id, db_pivot.batch_event_id)
+            return reloaded_obj if reloaded_obj else db_pivot
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating AnimalBatchPivot record: {str(e)}") from e

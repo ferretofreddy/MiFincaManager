@@ -1,4 +1,4 @@
-# app/crud/animal_groups.py
+# app/crud/animal_group.py
 from typing import Optional, List
 import uuid
 from datetime import datetime
@@ -149,7 +149,7 @@ class CRUDAnimalGroup(CRUDBase[AnimalGroup, AnimalGroupCreate, AnimalGroupUpdate
                 )
                 .filter(self.model.id == updated_animal_group.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Changed to scalars().first()
         return updated_animal_group
 
 # Crea una instancia de CRUDAnimalGroup que se puede importar y usar en los routers

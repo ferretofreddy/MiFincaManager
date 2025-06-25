@@ -1,4 +1,4 @@
-# app/crud/modules.py
+# app/crud/module.py
 from typing import Optional, List
 import uuid
 
@@ -103,7 +103,8 @@ class CRUDModule(CRUDBase[Module, ModuleCreate, ModuleUpdate]):
                 )
                 .filter(self.model.id == updated_module.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_module
 
 # Crea una instancia de CRUDModule que se puede importar y usar en los routers

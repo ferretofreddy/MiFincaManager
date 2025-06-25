@@ -1,4 +1,4 @@
-# app/crud/transactions.py
+# app/crud/transaction.py
 from typing import Optional, List
 import uuid
 from datetime import datetime
@@ -200,7 +200,7 @@ class CRUDTransaction(CRUDBase[Transaction, TransactionCreate, TransactionUpdate
                     )
                     .filter(self.model.id == updated_transaction.id)
                 )
-                return result.scalar_one_or_none()
+                return result.scalars().first() # Changed to scalars().first()
             return updated_transaction
         except Exception as e:
             await db.rollback()

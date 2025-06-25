@@ -16,7 +16,7 @@ from app.models.master_data import MasterData # Necesario para validar MasterDat
 from app.models.animal_feeding_pivot import AnimalFeedingPivot # Necesario para gestionar pivotes
 
 from app.schemas.feeding import FeedingCreate, FeedingUpdate
-from app.schemas.animal_feeding_pivot import AnimalFeedingPivotCreate
+from app.schemas.animal_feeding_pivot import AnimalFeedingPivotCreate # Aunque no se use directamente, es bueno tener el contexto
 
 # Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
@@ -58,17 +58,17 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
         """
         Remueve asociaciones entre un evento de alimentación y una lista de animales.
         """
-        for animal_id in animal_ids_to_remove:
-            await db.execute(
-                select(AnimalFeedingPivot)
-                .filter(and_(
-                    AnimalFeedingPivot.animal_id == animal_id,
-                    AnimalFeedingPivot.feeding_event_id == feeding_event_id
-                ))
-                .delete()
+        # SQLAlchemy 2.0+ recomienda delete() con synchronize_session=False para eliminar múltiples
+        # Si tienes problemas, podrías iterar y eliminar individualmente, pero esta es la forma performante.
+        await db.execute(
+            AnimalFeedingPivot.__table__.delete().where(
+                and_(
+                    AnimalFeedingPivot.feeding_event_id == feeding_event_id,
+                    AnimalFeedingPivot.animal_id.in_([uuid.UUID(id_str) for id_str in animal_ids_to_remove]) # Asegurarse que animal_ids_to_remove es una lista de UUIDs
+                )
             )
-        await db.flush()
-
+        )
+        await db.flush() # Flush para que los cambios sean visibles en la transacción
 
     async def create(self, db: AsyncSession, *, obj_in: FeedingCreate, recorded_by_user_id: uuid.UUID) -> Feeding:
         """
@@ -118,7 +118,7 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 )
                 .filter(Feeding.id == db_feeding.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Usar first() para consistencia
         except Exception as e:
             await db.rollback()
             # Si es un NotFoundError que lanzamos, relanzarlo. Si es otro error, envolverlo.
@@ -140,7 +140,7 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
             )
             .filter(self.model.id == feeding_id)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first() # Usar first() para consistencia
 
     async def get_multi_by_animal_id(self, db: AsyncSession, animal_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Feeding]:
         """
@@ -197,7 +197,7 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 if animals_to_remove:
                     await self._remove_animal_associations(db, db_obj.id, [uuid.UUID(id_str) for id_str in animals_to_remove])
             
-            db.add(db_obj) # Marcar el objeto como modificado
+            db.add(db_obj) # Marcar el objeto como modificado (aunque el super().update ya lo hace en CRUDBase)
             await db.commit()
             await db.refresh(db_obj)
 
@@ -212,7 +212,8 @@ class CRUDFeeding(CRUDBase[Feeding, FeedingCreate, FeedingUpdate]):
                 )
                 .filter(self.model.id == db_obj.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         except Exception as e:
             await db.rollback()
             if isinstance(e, NotFoundError):

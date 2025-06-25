@@ -162,7 +162,7 @@ class CRUDProduct(CRUDBase[Product, ProductCreate, ProductUpdate]):
                     )
                     .filter(self.model.id == updated_product.id)
                 )
-                return result.scalar_one_or_none()
+                return result.scalars().first() # Changed to scalars().first()
             return updated_product
         except Exception as e:
             await db.rollback()

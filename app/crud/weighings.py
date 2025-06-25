@@ -42,7 +42,7 @@ class CRUDWeighing(CRUDBase[Weighing, WeighingCreate, WeighingUpdate]):
                 )
                 .filter(Weighing.id == db_weighing.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Usar first() para consistencia
         except Exception as e:
             await db.rollback()
             raise CRUDException(f"Error creating Weighing record: {str(e)}") from e
@@ -59,7 +59,7 @@ class CRUDWeighing(CRUDBase[Weighing, WeighingCreate, WeighingUpdate]):
             )
             .filter(self.model.id == weighing_id)
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first() # Usar first() para consistencia
 
     async def get_multi_by_animal_id(self, db: AsyncSession, animal_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Weighing]:
         """
@@ -92,7 +92,8 @@ class CRUDWeighing(CRUDBase[Weighing, WeighingCreate, WeighingUpdate]):
                 )
                 .filter(self.model.id == updated_weighing.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_weighing
 
     async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> Weighing:

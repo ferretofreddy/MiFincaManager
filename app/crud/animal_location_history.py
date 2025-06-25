@@ -30,15 +30,20 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
         """
         # Opcional: Lógica para cerrar la ubicación anterior del animal si existe
         # Por ejemplo, si un animal solo puede estar en un lote activo a la vez:
-        # existing_active_location = await db.execute(
+        # existing_active_location_query = await db.execute(
         #     select(AnimalLocationHistory).filter(
         #         and_(AnimalLocationHistory.animal_id == obj_in.animal_id, AnimalLocationHistory.departure_date.is_(None))
         #     )
         # )
-        # if existing_active_location.scalar_one_or_none():
+        # existing_active_location = existing_active_location_query.scalars().first()
+        # if existing_active_location:
         #     # Cierra la entrada anterior (actualiza departure_date)
-        #     await self.update(db, db_obj=existing_active_location.scalar_one(), obj_in=AnimalLocationHistoryUpdate(departure_date=obj_in.entry_date))
-        #     # Esto es una simplificación, la lógica real puede ser más compleja.
+        #     # Asegúrate de que obj_in.entry_date sea una fecha válida para el cierre
+        #     update_data = {"departure_date": obj_in.entry_date}
+        #     await self.update(db, db_obj=existing_active_location, obj_in=update_data)
+        #     # Esto es una simplificación, la lógica real puede ser más compleja
+        #     # como verificar que entry_date de la nueva entrada sea posterior a la de la anterior.
+
 
         try:
             db_obj = self.model(**obj_in.model_dump(), created_by_user_id=created_by_user_id)
@@ -151,7 +156,7 @@ class CRUDAnimalLocationHistory(CRUDBase[AnimalLocationHistory, AnimalLocationHi
                 )
                 .filter(self.model.id == updated_history.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Changed to scalars().first()
         return updated_history
 
 # Crea una instancia de CRUDAnimalLocationHistory que se puede importar y usar en los routers

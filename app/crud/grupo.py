@@ -1,4 +1,4 @@
-# app/crud/grupos.py
+# app/crud/grupo.py
 from typing import Optional, List
 import uuid
 
@@ -102,7 +102,8 @@ class CRUDGrupo(CRUDBase[Grupo, GrupoCreate, GrupoUpdate]):
                 )
                 .filter(self.model.id == updated_grupo.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_grupo
 
 # Crea una instancia de CRUDGrupo que se puede importar y usar en los routers

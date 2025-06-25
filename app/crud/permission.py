@@ -1,4 +1,4 @@
-# app/crud/permissions.py
+# app/crud/permission.py
 from typing import Optional, List
 import uuid
 
@@ -125,7 +125,8 @@ class CRUDPermission(CRUDBase[Permission, PermissionCreate, PermissionUpdate]):
                 )
                 .filter(self.model.id == updated_permission.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_permission
 
 # Crea una instancia de CRUDPermission que se puede importar y usar en los routers

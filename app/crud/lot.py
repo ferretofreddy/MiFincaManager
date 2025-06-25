@@ -1,4 +1,4 @@
-# app/crud/lots.py
+# app/crud/lot.py
 from typing import Optional, List
 import uuid
 
@@ -88,7 +88,8 @@ class CRUDLot(CRUDBase[Lot, LotCreate, LotUpdate]):
                 .options(selectinload(self.model.farm))
                 .filter(self.model.id == updated_lot.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_lot
 
 # Crea una instancia de CRUDLot que se puede importar y usar en los routers

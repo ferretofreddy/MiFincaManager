@@ -3,33 +3,37 @@
 # Aquí importamos las instancias de CRUD de cada modelo
 # para un acceso fácil desde otras partes de la aplicación.
 
-from .users import user as user_crud
-from .farms import farm as farm_crud
-from .lots import lot as lot_crud
-from .master_data import master_data as master_data_crud
-from .roles import role as role_crud
-from .permissions import permission as permission_crud
-from .modules import module as module_crud
-from .role_permissions import role_permission as role_permission_crud
-from .user_roles import user_role as user_role_crud
-from .animals import animal as animal_crud
-from .grupos import grupo as grupo_crud
-from .animal_groups import animal_group as animal_group_crud
-from .animal_location_history import animal_location_history as animal_location_history_crud
-from .health_events import health_event as health_event_crud
-from .animal_health_event_pivot import animal_health_event_pivot as animal_health_event_pivot_crud
-from .reproductive_events import reproductive_event as reproductive_event_crud
-from .offspring_born import offspring_born as offspring_born_crud
-from .weighings import weighing as weighing_crud
-from .feedings import feeding as feeding_crud
-from .animal_feeding_pivot import animal_feeding_pivot as animal_feeding_pivot_crud
-from .transactions import transaction as transaction_crud
-from .batches import batch as batch_crud
-from .animal_batch_pivot import animal_batch_pivot as animal_batch_pivot_crud
-from .products import product as product_crud
-from .user_farm_access import user_farm_access
 from .base import CRUDBase
+from .user import user
+from .farm import farm
+from .animal import animal
+from .lot import lot
+from .master_data import master_data
+from .grupo import grupo
+from .health_events import health_event
+from .reproductive_events import reproductive_event
+from .offspring_born import offspring_born
+from .weighings import weighing
+from .feedings import feeding
+from .batch import batch
+from .transaction import transaction
+from .animal_group import animal_group
 
+# CRUDs de seguridad
+from .module import module
+from .permission import permission
+from .role import role
+from .role_permissions import role_permission
+from .user_roles import user_role
+
+
+# Últimos CRUDs
+from .products import product
+from .user_farm_access import user_farm_access
+from .animal_batch_pivot import animal_batch_pivot
+from .animal_feeding_pivot import animal_feeding_pivot
+from .animal_health_event_pivot import animal_health_event_pivot
+from .animal_location_history import animal_location_history
 
 # Cuando crees otros módulos CRUD, impórtalos aquí también:
 # from .products import product as product_crud

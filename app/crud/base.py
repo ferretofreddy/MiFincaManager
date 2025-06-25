@@ -6,7 +6,7 @@ from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func
+from sqlalchemy import func # Importa func para funciones SQL como lower, count, etc.
 
 from app.db.base import Base # Importa la clase Base de tu configuración
 

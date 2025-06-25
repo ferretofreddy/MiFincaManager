@@ -1,14 +1,16 @@
-# app/crud/animals.py
+# app/crud/animal.py
 from typing import Optional, List, Dict, Any
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
-from sqlalchemy import or_, and_ # Importa 'or_' y 'and_' para combinaciones de filtros
+from sqlalchemy import or_, and_, func # Importa 'or_', 'and_', y 'func' para combinaciones de filtros y funciones SQL
 
-# Importa el modelo Animal y los esquemas de animal
+# Importa los modelos necesarios
 from app.models.animal import Animal
+from app.models.lot import Lot # ¡IMPORTADO! Necesario para Lot.farm
+from app.models.farm import Farm # ¡IMPORTADO! Necesario para la comprobación del dueño de la finca
 from app.schemas.animal import AnimalCreate, AnimalUpdate
 
 # Importa la CRUDBase y las excepciones
@@ -37,12 +39,13 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
             raise AlreadyExistsError(f"Animal with tag_id '{obj_in.tag_id}' already exists.")
 
         try:
+            # Crea el objeto Animal con los datos del esquema y el owner_user_id
             db_obj = self.model(**obj_in.model_dump(), owner_user_id=owner_user_id)
             db.add(db_obj)
             await db.commit()
             await db.refresh(db_obj) # Obtiene el ID, created_at, updated_at
             
-            # Recarga el animal con todas sus relaciones para la respuesta
+            # Recarga el animal con todas sus relaciones para la respuesta completa
             result = await db.execute(
                 select(Animal)
                 .options(
@@ -109,26 +112,21 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
             selectinload(self.model.current_lot).selectinload(Lot.farm) # Carga anidada para lot.farm
         )
 
-        # Filtrar por animales propiedad del usuario o animales en fincas accesibles
+        # Criterios de filtrado basados en el acceso del usuario
         auth_filter_conditions = [
-            self.model.owner_user_id == user_id # Propietario del animal
+            self.model.owner_user_id == user_id # Animales propiedad del usuario
         ]
         if accessible_farm_ids:
+            # Animales en fincas a las que el usuario tiene acceso
             auth_filter_conditions.append(
-                self.model.current_lot.has(Lot.farm_id.in_(accessible_farm_ids)) # Animal en finca accesible
+                self.model.current_lot.has(Lot.farm_id.in_(accessible_farm_ids))
             )
         
+        # Combina las condiciones con un OR
         query = query.filter(or_(*auth_filter_conditions))
 
-        # Filtros adicionales
+        # Filtros adicionales si se proporcionan
         if farm_id:
-            # Asegura que el farm_id solicitado esté en la lista de fincas accesibles del usuario
-            if farm_id not in accessible_farm_ids and user_id != (await db.execute(select(Farm.owner_user_id).filter(Farm.id == farm_id))).scalar_one_or_none():
-                 # Si el usuario no es dueño de la finca y no tiene acceso explícito a ella,
-                 # la consulta no debería devolver resultados para esa finca.
-                 # Esto ya debería ser manejado por la capa de autorización del router,
-                 # pero es una doble capa de seguridad.
-                return [] # Retorna vacío si no hay acceso a la finca filtrada
             query = query.filter(self.model.current_lot.has(Lot.farm_id == farm_id))
 
         if lot_id:
@@ -145,7 +143,7 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
         """
         updated_animal = await super().update(db, db_obj=db_obj, obj_in=obj_in)
         if updated_animal:
-            # Recarga el objeto actualizado con las relaciones para la respuesta
+            # Recarga el objeto actualizado con las relaciones para la respuesta completa
             result = await db.execute(
                 select(self.model)
                 .options(
@@ -155,11 +153,21 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
                     selectinload(self.model.current_lot).selectinload(Lot.farm),
                     selectinload(self.model.mother),
                     selectinload(self.model.father),
+                    selectinload(self.model.groups_history), # Asegurarse de recargar todas las relaciones
+                    selectinload(self.model.locations_history),
+                    selectinload(self.model.health_events_pivot),
+                    selectinload(self.model.reproductive_events),
+                    selectinload(self.model.sire_reproductive_events),
+                    selectinload(self.model.weighings),
+                    selectinload(self.model.feedings_pivot),
+                    selectinload(self.model.transactions),
+                    selectinload(self.model.offspring_born_events),
                 )
                 .filter(self.model.id == updated_animal.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Usar first() en lugar de scalar_one_or_none() ya que sabemos que existe
         return updated_animal
 
 # Crea una instancia de CRUDAnimal que se puede importar y usar en los routers
 animal = CRUDAnimal(Animal)
+

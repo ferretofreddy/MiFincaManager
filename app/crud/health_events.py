@@ -10,9 +10,9 @@ from sqlalchemy import and_
 
 # Importa el modelo HealthEvent y AnimalHealthEventPivot, y los esquemas
 from app.models.health_event import HealthEvent
-from app.models.animal_health_event_pivot import AnimalHealthEventPivot
+from app.models.animal_health_event_pivot import AnimalHealthEventPivot # Necesario para la carga anidada
 from app.schemas.health_event import HealthEventCreate, HealthEventUpdate
-from app.schemas.animal_health_event_pivot import AnimalHealthEventPivotCreate
+from app.schemas.animal_health_event_pivot import AnimalHealthEventPivotCreate # Aunque no se use directamente, es bueno tener el contexto
 
 # Importa la CRUDBase y las excepciones
 from app.crud.base import CRUDBase
@@ -126,7 +126,8 @@ class CRUDHealthEvent(CRUDBase[HealthEvent, HealthEventCreate, HealthEventUpdate
                 )
                 .filter(self.model.id == updated_event.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_event
 
     async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> HealthEvent:

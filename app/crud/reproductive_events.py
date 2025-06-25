@@ -10,6 +10,11 @@ from sqlalchemy import and_
 
 # Importa el modelo ReproductiveEvent y los esquemas
 from app.models.reproductive_event import ReproductiveEvent
+# También necesitamos importar el modelo Animal para las cargas eager
+from app.models.animal import Animal
+# Y el modelo OffspringBorn si lo necesitas para cargas específicas del pivote
+from app.models.offspring_born import OffspringBorn
+
 from app.schemas.reproductive_event import ReproductiveEventCreate, ReproductiveEventUpdate
 
 # Importa la CRUDBase y las excepciones
@@ -118,7 +123,8 @@ class CRUDReproductiveEvent(CRUDBase[ReproductiveEvent, ReproductiveEventCreate,
                 )
                 .filter(self.model.id == updated_event.id)
             )
-            return result.scalar_one_or_none()
+            # Cambiado a scalars().first()
+            return result.scalars().first()
         return updated_event
 
     async def delete(self, db: AsyncSession, *, id: uuid.UUID) -> ReproductiveEvent:

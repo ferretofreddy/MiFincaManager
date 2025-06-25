@@ -1,4 +1,4 @@
-# app/crud/batches.py
+# app/crud/batch.py
 from typing import Optional, List
 import uuid
 from datetime import datetime
@@ -241,7 +241,7 @@ class CRUDBatch(CRUDBase[Batch, BatchCreate, BatchUpdate]):
                 )
                 .filter(self.model.id == db_obj.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first() # Changed to scalars().first()
         except Exception as e:
             await db.rollback()
             if isinstance(e, NotFoundError) or isinstance(e, CRUDException):
