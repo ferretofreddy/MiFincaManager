@@ -42,7 +42,7 @@ class Product(BaseModel): # Hereda de BaseModel para id, created_at, updated_at 
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # Relaciones ORM
-    product_type: Mapped["MasterData"] = relationship(MasterData, foreign_keys=[product_type_id], back_populates="products_as_type")
-    unit: Mapped["MasterData"] = relationship(MasterData, foreign_keys=[unit_id], back_populates="products_as_unit")
-    farm: Mapped["Farm"] = relationship(Farm, back_populates="products")
-    created_by_user: Mapped["User"] = relationship(User, back_populates="products_created")
+    product_type: Mapped["MasterData"] = relationship("MasterData", foreign_keys=[product_type_id], back_populates="products_as_type")
+    unit: Mapped["MasterData"] = relationship("MasterData", foreign_keys=[unit_id], back_populates="products_as_unit")
+    farm: Mapped["Farm"] = relationship("Farm", back_populates="products")
+    created_by_user: Mapped["User"] = relationship("User", back_populates="products_created")

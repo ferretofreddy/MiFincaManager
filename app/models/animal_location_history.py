@@ -25,6 +25,6 @@ class AnimalLocationHistory(BaseModel):
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # Relaciones - USANDO REFERENCIAS DE STRING O FORWARDREF
-    animal: Mapped["Animal"] = relationship(Animal, back_populates="locations_history")
-    lot: Mapped["Lot"] = relationship(Lot, back_populates="location_history_entries") # <--- USA LA REFERENCIA STRING/ForwardRef
-    created_by_user: Mapped["User"] = relationship(User, back_populates="animal_location_history_created")
+    animal: Mapped["Animal"] = relationship("Animal", back_populates="locations_history")
+    lot: Mapped["Lot"] = relationship("Lot", back_populates="location_history_entries") # <--- USA LA REFERENCIA STRING/ForwardRef
+    created_by_user: Mapped["User"] = relationship("User", back_populates="animal_location_history_created")

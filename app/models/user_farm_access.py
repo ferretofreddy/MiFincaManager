@@ -33,6 +33,6 @@ class UserFarmAccess(Base): # Hereda de Base para PK compuesta
     __table_args__ = (PrimaryKeyConstraint("user_id", "farm_id"),)
 
     # Relaciones ORM
-    user: Mapped["User"] = relationship(User, foreign_keys=[user_id], back_populates="farm_accesses")
-    farm: Mapped["Farm"] = relationship(Farm, back_populates="farm_accesses")
-    assigned_by_user: Mapped["User"] = relationship(User, foreign_keys=[assigned_by_user_id], back_populates="accesses_assigned")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id], back_populates="farm_accesses")
+    farm: Mapped["Farm"] = relationship("Farm", back_populates="farm_accesses")
+    assigned_by_user: Mapped["User"] = relationship("User", foreign_keys=[assigned_by_user_id], back_populates="accesses_assigned")

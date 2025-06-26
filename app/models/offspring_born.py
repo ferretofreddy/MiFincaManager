@@ -24,6 +24,6 @@ class OffspringBorn(BaseModel): # Hereda de BaseModel
     born_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False) # Usuario que registró el nacimiento
 
     # Relaciones - USANDO REFERENCIAS DE STRING O FORWARDREF
-    reproductive_event: Mapped["ReproductiveEvent"] = relationship(ReproductiveEvent, back_populates="offspring_born_events")
-    offspring_animal: Mapped[Optional["Animal"]] = relationship(Animal, foreign_keys=[offspring_animal_id], back_populates="offspring_born_events")
-    born_by_user: Mapped["User"] = relationship(User, back_populates="offspring_born")
+    reproductive_event: Mapped["ReproductiveEvent"] = relationship("ReproductiveEvent", back_populates="offspring_born_events")
+    offspring_animal: Mapped[Optional["Animal"]] = relationship("Animal", foreign_keys=[offspring_animal_id], back_populates="offspring_born_events")
+    born_by_user: Mapped["User"] = relationship("User", back_populates="offspring_born")

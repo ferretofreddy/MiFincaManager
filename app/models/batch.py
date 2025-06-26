@@ -29,12 +29,12 @@ class Batch(BaseModel): # Hereda de BaseModel
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # Relaciones
-    batch_type: Mapped["MasterData"] = relationship(MasterData, foreign_keys=[batch_type_id], back_populates="batches_batch_type")
-    farm: Mapped["Farm"] = relationship(Farm, back_populates="batches")
-    created_by_user: Mapped["User"] = relationship(User, back_populates="batches_created")
+    batch_type: Mapped["MasterData"] = relationship("MasterData", foreign_keys=[batch_type_id], back_populates="batches_batch_type")
+    farm: Mapped["Farm"] = relationship("Farm", back_populates="batches")
+    created_by_user: Mapped["User"] = relationship("User", back_populates="batches_created")
     
     # Relación inversa con AnimalBatchPivot (la tabla de pivote para animales asociados)
-    animal_batches: Mapped[List["AnimalBatchPivot"]] = relationship(AnimalBatchPivot, back_populates="batch_event", cascade="all, delete-orphan")
+    animal_batches: Mapped[List["AnimalBatchPivot"]] = relationship("AnimalBatchPivot", back_populates="batch_event", cascade="all, delete-orphan")
     
     # Si Transaction tiene un FK directo a Batch, se añadiría aquí.
     # Por ahora, Transaction maneja un entity_id polimórfico, por lo que la relación

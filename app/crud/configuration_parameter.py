@@ -1,5 +1,5 @@
 # app/crud/configuration_parameter.py
-from typing import Optional, List
+from typing import Optional, List, Union, Dict, Any
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession

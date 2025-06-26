@@ -1,5 +1,5 @@
 # app/crud/animal.py
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,58 +34,84 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
             select(Animal).filter(Animal.tag_id == obj_in.tag_id)
         )
         if existing_animal.scalar_one_or_none():
-            raise AlreadyExistsError(f"Animal with tag_id '{obj_in.tag_id}' already exists.")
+            raise AlreadyExistsError(f"Animal with tag ID '{obj_in.tag_id}' already exists.")
+        
+        # Validar current_lot_id si se proporciona
+        if obj_in.current_lot_id:
+            lot_exists = await db.execute(select(Lot).filter(Lot.id == obj_in.current_lot_id))
+            if not lot_exists.scalar_one_or_none():
+                raise NotFoundError(f"Lot with ID {obj_in.current_lot_id} not found.")
+
+        # Validar species_id y breed_id (MasterData)
+        if obj_in.species_id:
+            species_md = await db.execute(select(models.MasterData).filter(models.MasterData.id == obj_in.species_id))
+            if not species_md.scalar_one_or_none():
+                raise NotFoundError(f"Species MasterData with ID {obj_in.species_id} not found.")
+        if obj_in.breed_id:
+            breed_md = await db.execute(select(models.MasterData).filter(models.MasterData.id == obj_in.breed_id))
+            if not breed_md.scalar_one_or_none():
+                raise NotFoundError(f"Breed MasterData with ID {obj_in.breed_id} not found.")
+        
+        # Validar mother_animal_id y father_animal_id
+        if obj_in.mother_animal_id:
+            mother_exists = await db.execute(select(Animal).filter(Animal.id == obj_in.mother_animal_id))
+            if not mother_exists.scalar_one_or_none():
+                raise NotFoundError(f"Mother animal with ID {obj_in.mother_animal_id} not found.")
+        if obj_in.father_animal_id:
+            father_exists = await db.execute(select(Animal).filter(Animal.id == obj_in.father_animal_id))
+            if not father_exists.scalar_one_or_none():
+                raise NotFoundError(f"Father animal with ID {obj_in.father_animal_id} not found.")
 
         try:
-            # Crea el objeto Animal con los datos del esquema y el owner_user_id
-            db_obj = self.model(**obj_in.model_dump(), owner_user_id=owner_user_id)
-            db.add(db_obj)
+            db_animal = self.model(**obj_in.model_dump(), owner_user_id=owner_user_id)
+            db.add(db_animal)
             await db.commit()
-            await db.refresh(db_obj) # Obtiene el ID, created_at, updated_at
-            
-            # Recarga el animal con todas sus relaciones para la respuesta completa
+            await db.refresh(db_animal)
+
+            # Recargar el animal con las relaciones para la respuesta completa
             result = await db.execute(
-                select(Animal)
+                select(self.model)
                 .options(
-                    selectinload(Animal.owner_user),
-                    selectinload(Animal.species),
-                    selectinload(Animal.breed),
-                    selectinload(Animal.current_lot).selectinload(Lot.farm), # Carga anidada para lot.farm
-                    selectinload(Animal.mother),
-                    selectinload(Animal.father),
-                    # Agrega todas las relaciones que quieras cargar por defecto al crear
-                    selectinload(Animal.groups_history),
-                    selectinload(Animal.locations_history),
-                    selectinload(Animal.health_events_pivot),
-                    selectinload(Animal.reproductive_events),
-                    selectinload(Animal.sire_reproductive_events),
-                    selectinload(Animal.weighings),
-                    selectinload(Animal.feedings_pivot),
-                    selectinload(Animal.transactions),
-                    selectinload(Animal.offspring_born_events),
+                    selectinload(self.model.owner_user),
+                    selectinload(self.model.species),
+                    selectinload(self.model.breed),
+                    selectinload(self.model.current_lot).selectinload(Lot.farm),
+                    selectinload(self.model.mother),
+                    selectinload(self.model.father),
+                    selectinload(self.model.groups_history),
+                    selectinload(self.model.locations_history),
+                    selectinload(self.model.health_events_pivot),
+                    selectinload(self.model.reproductive_events),
+                    selectinload(self.model.sire_reproductive_events),
+                    selectinload(self.model.weighings),
+                    selectinload(self.model.feedings_pivot),
+                    # REMOVER ESTA LÍNEA: selectinload(self.model.transactions),
+                    selectinload(self.model.offspring_born_events),
+                    selectinload(self.model.batches_pivot) # Asegúrate de que esto se añadió previamente
                 )
-                .filter(Animal.id == db_obj.id)
+                .filter(self.model.id == db_animal.id)
             )
-            return result.scalar_one_or_none()
+            return result.scalars().first()
         except DBIntegrityError as e:
             await db.rollback()
             raise AlreadyExistsError(f"Error de integridad al crear Animal: {e}") from e
         except Exception as e:
             await db.rollback()
+            if isinstance(e, (NotFoundError, AlreadyExistsError)):
+                raise e
             raise CRUDException(f"Error creating Animal: {str(e)}") from e
 
     async def get(self, db: AsyncSession, id: uuid.UUID) -> Optional[Animal]:
         """
-        Obtiene un animal por su ID, cargando todas sus relaciones importantes.
+        Obtiene un animal por su ID, cargando sus relaciones.
         """
-        # Las relaciones se cargan aquí para asegurar que el objeto retornado esté completo
         result = await db.execute(
             select(self.model)
             .options(
                 selectinload(self.model.owner_user),
                 selectinload(self.model.species),
                 selectinload(self.model.breed),
-                selectinload(self.model.current_lot).selectinload(Lot.farm), # Carga anidada
+                selectinload(self.model.current_lot).selectinload(Lot.farm),
                 selectinload(self.model.mother),
                 selectinload(self.model.father),
                 selectinload(self.model.groups_history),
@@ -95,81 +121,147 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
                 selectinload(self.model.sire_reproductive_events),
                 selectinload(self.model.weighings),
                 selectinload(self.model.feedings_pivot),
-                selectinload(self.model.transactions),
+                # REMOVER ESTA LÍNEA: selectinload(self.model.transactions),
                 selectinload(self.model.offspring_born_events),
+                selectinload(self.model.batches_pivot)
             )
             .filter(self.model.id == id)
         )
         return result.scalar_one_or_none()
-    
-    async def get_multi_by_user_and_filters(
-        self, 
-        db: AsyncSession, 
-        user_id: uuid.UUID, 
-        accessible_farm_ids: Optional[List[uuid.UUID]] = None,
-        farm_id: Optional[uuid.UUID] = None, 
-        lot_id: Optional[uuid.UUID] = None,
-        skip: int = 0, 
-        limit: int = 100
-    ) -> List[Animal]:
-        """
-        Obtiene una lista de animales propiedad del usuario o de fincas a las que tiene acceso,
-        opcionalmente filtrada por farm_id y/o lot_id.
-        """
-        query = select(self.model).options(
-            selectinload(self.model.owner_user),
-            selectinload(self.model.species),
-            selectinload(self.model.breed),
-            selectinload(self.model.current_lot).selectinload(Lot.farm)
-        )
 
-        # Criterios de filtrado basados en el acceso del usuario
-        auth_filter_conditions = [
-            self.model.owner_user_id == user_id
-        ]
-        if accessible_farm_ids:
-            auth_filter_conditions.append(
-                self.model.current_lot.has(Lot.farm_id.in_(accessible_farm_ids))
+    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[Animal]:
+        """
+        Obtiene múltiples animales, cargando sus relaciones.
+        """
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.owner_user),
+                selectinload(self.model.species),
+                selectinload(self.model.breed),
+                selectinload(self.model.current_lot),
+                selectinload(self.model.mother),
+                selectinload(self.model.father)
             )
-        
-        # Combina las condiciones con un OR
-        query = query.filter(or_(*auth_filter_conditions))
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
 
-        # Filtros adicionales si se proporcionan
-        if farm_id:
-            query = query.filter(self.model.current_lot.has(Lot.farm_id == farm_id))
+    async def get_animals_by_owner(self, db: AsyncSession, owner_user_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Animal]:
+        """
+        Obtiene animales por el ID de su propietario.
+        """
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.owner_user),
+                selectinload(self.model.species),
+                selectinload(self.model.breed),
+                selectinload(self.model.current_lot)
+            )
+            .filter(self.model.owner_user_id == owner_user_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
 
-        if lot_id:
-            query = query.filter(self.model.current_lot_id == lot_id)
+    async def get_animals_by_lot(self, db: AsyncSession, lot_id: uuid.UUID, skip: int = 0, limit: int = 100) -> List[Animal]:
+        """
+        Obtiene animales por el ID del lote actual al que pertenecen.
+        """
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.owner_user),
+                selectinload(self.model.species),
+                selectinload(self.model.breed),
+                selectinload(self.model.current_lot)
+            )
+            .filter(self.model.current_lot_id == lot_id)
+            .offset(skip)
+            .limit(limit)
+        )
+        return result.scalars().all()
 
-        result = await db.execute(query.offset(skip).limit(limit))
+    async def get_by_tag_id(self, db: AsyncSession, tag_id: str) -> Optional[Animal]:
+        """
+        Obtiene un animal por su tag_id (sensible a mayúsculas/minúsculas).
+        """
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.owner_user),
+                selectinload(self.model.species),
+                selectinload(self.model.breed),
+                selectinload(self.model.current_lot)
+            )
+            .filter(self.model.tag_id == tag_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_name(self, db: AsyncSession, name: str) -> Optional[List[Animal]]:
+        """
+        Obtiene animales por su nombre (insensible a mayúsculas/minúsculas).
+        Retorna una lista ya que los nombres pueden no ser únicos.
+        """
+        result = await db.execute(
+            select(self.model)
+            .options(
+                selectinload(self.model.owner_user),
+                selectinload(self.model.species),
+                selectinload(self.model.breed),
+                selectinload(self.model.current_lot)
+            )
+            .filter(func.lower(self.model.name) == func.lower(name))
+        )
         return result.scalars().all()
 
     async def update(self, db: AsyncSession, *, db_obj: Animal, obj_in: Union[AnimalUpdate, Dict[str, Any]]) -> Animal:
         """
         Actualiza un animal existente.
-        Después de la actualización, recarga el objeto con las relaciones necesarias.
         """
         try:
-            # Si obj_in es un Pydantic model, conviértelo a dict y excluye unset
             if isinstance(obj_in, dict):
                 update_data = obj_in
             else:
                 update_data = obj_in.model_dump(exclude_unset=True)
 
-            # Revisa si se intenta cambiar el tag_id y si el nuevo tag_id ya existe en otro animal
+            # Validaciones si los IDs de MasterData o Lot cambian
+            if "species_id" in update_data and update_data["species_id"] != db_obj.species_id:
+                species_md = await db.execute(select(models.MasterData).filter(models.MasterData.id == update_data["species_id"]))
+                if not species_md.scalar_one_or_none():
+                    raise NotFoundError(f"Species MasterData with ID {update_data['species_id']} not found.")
+            
+            if "breed_id" in update_data and update_data["breed_id"] != db_obj.breed_id:
+                breed_md = await db.execute(select(models.MasterData).filter(models.MasterData.id == update_data["breed_id"]))
+                if not breed_md.scalar_one_or_none():
+                    raise NotFoundError(f"Breed MasterData with ID {update_data['breed_id']} not found.")
+
+            if "current_lot_id" in update_data and update_data["current_lot_id"] != db_obj.current_lot_id:
+                lot_exists = await db.execute(select(Lot).filter(Lot.id == update_data["current_lot_id"]))
+                if not lot_exists.scalar_one_or_none():
+                    raise NotFoundError(f"Lot with ID {update_data['current_lot_id']} not found.")
+
+            # Validar mother_animal_id y father_animal_id si cambian
+            if "mother_animal_id" in update_data and update_data["mother_animal_id"] != db_obj.mother_animal_id:
+                mother_exists = await db.execute(select(Animal).filter(Animal.id == update_data["mother_animal_id"]))
+                if not mother_exists.scalar_one_or_none():
+                    raise NotFoundError(f"Mother animal with ID {update_data['mother_animal_id']} not found.")
+            if "father_animal_id" in update_data and update_data["father_animal_id"] != db_obj.father_animal_id:
+                father_exists = await db.execute(select(Animal).filter(Animal.id == update_data["father_animal_id"]))
+                if not father_exists.scalar_one_or_none():
+                    raise NotFoundError(f"Father animal with ID {update_data['father_animal_id']} not found.")
+
+            # Si el tag_id se actualiza, verifica unicidad
             if "tag_id" in update_data and update_data["tag_id"] != db_obj.tag_id:
-                existing_animal = await db.execute(
-                    select(Animal).filter(
-                        and_(Animal.tag_id == update_data["tag_id"], Animal.id != db_obj.id)
-                    )
-                )
-                if existing_animal.scalar_one_or_none():
-                    raise AlreadyExistsError(f"Animal with tag_id '{update_data['tag_id']}' already exists.")
+                existing_animal_with_tag = await self.get_by_tag_id(db, tag_id=update_data["tag_id"])
+                if existing_animal_with_tag and existing_animal_with_tag.id != db_obj.id:
+                    raise AlreadyExistsError(f"Animal with tag ID '{update_data['tag_id']}' already exists.")
 
             updated_animal = await super().update(db, db_obj=db_obj, obj_in=update_data)
             if updated_animal:
-                # Recarga el objeto actualizado con las relaciones para la respuesta completa
+                # Recargar el animal actualizado con las relaciones para la respuesta completa
                 result = await db.execute(
                     select(self.model)
                     .options(
@@ -186,8 +278,9 @@ class CRUDAnimal(CRUDBase[Animal, AnimalCreate, AnimalUpdate]):
                         selectinload(self.model.sire_reproductive_events),
                         selectinload(self.model.weighings),
                         selectinload(self.model.feedings_pivot),
-                        selectinload(self.model.transactions),
+                        # REMOVER ESTA LÍNEA: selectinload(self.model.transactions),
                         selectinload(self.model.offspring_born_events),
+                        selectinload(self.model.batches_pivot)
                     )
                     .filter(self.model.id == updated_animal.id)
                 )

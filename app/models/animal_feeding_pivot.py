@@ -29,5 +29,5 @@ class AnimalFeedingPivot(Base): # Hereda de Base directamente por la PK compuest
     __table_args__ = (PrimaryKeyConstraint("animal_id", "feeding_event_id"),)
 
     # Relaciones
-    animal: Mapped["Animal"] = relationship(Animal, back_populates="feedings_pivot")
-    feeding_event: Mapped["Feeding"] = relationship(Feeding, back_populates="animal_feedings")
+    animal: Mapped["Animal"] = relationship("Animal", back_populates="feedings_pivot")
+    feeding_event: Mapped["Feeding"] = relationship("Feeding", back_populates="animal_feedings")

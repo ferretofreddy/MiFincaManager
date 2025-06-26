@@ -29,5 +29,5 @@ class AnimalBatchPivot(Base): # Hereda de Base directamente por la PK compuesta
     __table_args__ = (PrimaryKeyConstraint("animal_id", "batch_event_id"),)
 
     # Relaciones
-    animal: Mapped["Animal"] = relationship(Animal, back_populates="batches_pivot")
-    batch_event: Mapped["Batch"] = relationship(Batch, back_populates="animal_batches")
+    animal: Mapped["Animal"] = relationship("Animal", back_populates="batches_pivot")
+    batch_event: Mapped["Batch"] = relationship("Batch", back_populates="animal_batches")

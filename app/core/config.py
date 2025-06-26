@@ -12,24 +12,25 @@ class Settings(BaseSettings):
     )
 
     # --- Configuración de la Base de Datos ---
-    # DATABASE_URL: La cadena de conexión a la base de datos (ej. PostgreSQL)
-    # Se espera que sea un DSN (Data Source Name), que Pydantic puede validar.
     DATABASE_URL: str
-    DB_POOL_SIZE: int = 10          # Número máximo de conexiones activas en el pool
-    DB_MAX_OVERFLOW: int = 20       # Número de conexiones adicionales que se pueden crear
-    DB_POOL_RECYCLE: int = 3600     # Tiempo en segundos después del cual una conexión inactiva será reciclada
-    DB_POOL_PRE_PING: bool = True   # Habilita el "pre-ping" para verificar la conexión antes de usarla
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_RECYCLE: int = 3600
+    DB_POOL_PRE_PING: bool = True
 
     # --- Configuración de Seguridad (JWT) ---
-    SECRET_KEY: str = "MiFincaManager"  # Clave secreta para firmar los tokens JWT
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 # Tiempo de expiración del token de acceso en minutos
-    ALGORITHM: str = "HS256"        # Algoritmo de cifrado para JWT (ej. HS256, RS256)
+    SECRET_KEY: str # No le asignes un valor aquí, se carga del .env
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 # Este es un valor por defecto si no está en .env
+    ALGORITHM: str = "HS256" # Este es un valor por defecto si no está en .env
 
     # --- Configuración General de la Aplicación ---
-    DEBUG: bool = False             # Modo de depuración (True para desarrollo, False para producción)
-    PROJECT_NAME: str = "MiFincaManager" # Nombre del proyecto
-    API_V1_STR: str = "/api/v1"     # Prefijo para las rutas de la API v1
+    DEBUG: bool = False # Este es un valor por defecto si no está en .env
+    PROJECT_NAME: str = "MiFincaManager" # Este es un valor por defecto si no está en .env
+    API_V1_STR: str = "/api/v1" # Este es un valor por defecto si no está en .env
+
+    # --- Configuracion de super usuario (Admin) ---
+    FIRST_SUPERUSER_EMAIL: str
+    FIRST_SUPERUSER_PASSWORD: str
 
 # Crea una instancia global de la configuración.
-# Esto cargará las variables de entorno al iniciar la aplicación.
 settings = Settings()

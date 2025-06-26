@@ -37,11 +37,11 @@ class HealthEvent(BaseModel):
     farm_id = Column(UUID(as_uuid=True), ForeignKey("farms.id"), nullable=False) # Finca donde ocurrió el evento
 
     # Relaciones - USANDO REFERENCIAS DE STRING O FORWARDREF
-    event_type: Mapped["MasterData"] = relationship(MasterData, foreign_keys=[event_type_id], back_populates="health_events_event_type")
-    product: Mapped[Optional["MasterData"]] = relationship(MasterData, foreign_keys=[product_id], back_populates="health_events_as_product") # Ajusta el back_populates si ya existe
-    unit: Mapped[Optional["MasterData"]] = relationship(MasterData, foreign_keys=[unit_id], back_populates="health_events_as_unit") # Ajusta el back_populates si ya existe
-    administered_by_user: Mapped["User"] = relationship(User, back_populates="health_events_administered")
-    farm: Mapped["Farm"] = relationship(Farm, back_populates="health_events")
+    event_type: Mapped["MasterData"] = relationship("MasterData", foreign_keys=[event_type_id], back_populates="health_events_event_type")
+    product: Mapped[Optional["MasterData"]] = relationship("MasterData", foreign_keys=[product_id], back_populates="health_events_as_product") # Ajusta el back_populates si ya existe
+    unit: Mapped[Optional["MasterData"]] = relationship("MasterData", foreign_keys=[unit_id], back_populates="health_events_as_unit") # Ajusta el back_populates si ya existe
+    administered_by_user: Mapped["User"] = relationship("User", back_populates="health_events_administered")
+    farm: Mapped["Farm"] = relationship("Farm", back_populates="health_events")
     
     # Relación inversa con AnimalHealthEventPivot
-    animal_health_events_pivot: Mapped[List["AnimalHealthEventPivot"]] = relationship(AnimalHealthEventPivot, back_populates="health_event", cascade="all, delete-orphan")
+    animal_health_events_pivot: Mapped[List["AnimalHealthEventPivot"]] = relationship("AnimalHealthEventPivot", back_populates="health_event", cascade="all, delete-orphan")

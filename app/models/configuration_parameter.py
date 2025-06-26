@@ -35,9 +35,9 @@ class ConfigurationParameter(BaseModel):
     # Auditoría
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, comment="User who created this parameter")
 
-    # Relaciones ORM
-    data_type: Mapped["MasterData"] = relationship(MasterData, back_populates="parameter_data_type")
-    created_by_user: Mapped["User"] = relationship(User, back_populates="configuration_parameters_created")
+    # Relaciones ORM - ¡Asegurarnos de que usen string literals!
+    data_type: Mapped["MasterData"] = relationship("MasterData", back_populates="configuration_parameters_data_type") # <-- ¡back_populates ajustado!
+    created_by_user: Mapped["User"] = relationship("User", back_populates="configuration_parameters_created")
 
     # Puedes añadir un @property para convertir el 'value' al tipo correcto
     # dependiendo de data_type_id, si es necesario.

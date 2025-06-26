@@ -1,48 +1,55 @@
 # app/models/role.py
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, Text, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Mapped
+from app.db.base import BaseModel # Hereda de BaseModel
 
-# Importa BaseModel de nuestro módulo app/db/base.py
-from app.db.base import BaseModel
+from typing import List, Optional, ForwardRef, TYPE_CHECKING # Importar TYPE_CHECKING
+if TYPE_CHECKING:
+    from .user import User
+    from .permission import Permission
+    from .user_role import UserRole # Para la tabla de asociación
+    from .role_permission import RolePermission # Para la tabla de asociación
 
-# Importa los modelos de asociación RolePermission y UserRole
-from .role_permission import RolePermission
-from .user_role import UserRole # Asegúrate de importar UserRole aquí
-
-class Role(BaseModel): # Hereda de BaseModel
+class Role(BaseModel):
     __tablename__ = "roles"
-    # id, created_at, updated_at son heredados de BaseModel
 
-    name = Column(String, unique=True, index=True, nullable=False) # Ej. "admin", "viewer", "farm_manager"
-    description = Column(String)
+    name = Column(String, unique=True, index=True, nullable=False)
+    description = Column(Text)
 
-    # Relaciones
-    # Relación inversa a RolePermission
-    role_permissions_associations = relationship(
-        "RolePermission",
-        back_populates="role",
-        cascade="all, delete-orphan"
-    )
-    # Relación de muchos-a-muchos a Permission a través de RolePermission
-    permissions = relationship(
+    # Relación Many-to-Many con Permission a través de RolePermission
+    permissions: Mapped[List["Permission"]] = relationship(
         "Permission",
-        secondary="role_permissions",
-        back_populates="roles"
+        secondary="role_permissions", # <-- ¡CORREGIDO a "role_permissions" si ese es el __tablename__!
+        primaryjoin="Role.id == RolePermission.role_id", 
+        secondaryjoin="Permission.id == RolePermission.permission_id", 
+        back_populates="roles",
+        overlaps="role_permissions_associations" # Añadido 'overlaps' para silenciar el warning
     )
 
-    # Relación inversa a UserRole (la asociación directa)
-    user_roles_associations = relationship(
-        "UserRole",
-        back_populates="role",
-        cascade="all, delete-orphan" # Asegura que las asociaciones se eliminen si el rol se elimina
-    )
-    # Relación de muchos-a-muchos a User a través de UserRole
-    # Esto permite acceder directamente a los objetos User desde un Role
-    users = relationship(
+    # Relación Many-to-Many con User a través de UserRole
+    users_with_this_role: Mapped[List["User"]] = relationship(
         "User",
-        secondary="user_roles", # Nombre de la tabla de unión
-        back_populates="roles" # Nombre de la relación inversa en el modelo User
+        secondary="user_roles", # Nombre de la tabla de asociación
+        primaryjoin="Role.id == UserRole.role_id", 
+        secondaryjoin="User.id == UserRole.user_id", 
+        back_populates="roles_assigned_to_user",
+        overlaps="user_roles_associations" # Añadido 'overlaps'
+    )
+
+    # Relaciones para las tablas de asociación (si las necesitas directamente)
+    role_permissions_associations: Mapped[List["RolePermission"]] = relationship(
+        "RolePermission", 
+        back_populates="role", 
+        cascade="all, delete-orphan",
+        overlaps="permissions" # ¡Ajustado para el nombre de la relación Many-to-Many!
+    )
+    user_roles_associations: Mapped[List["UserRole"]] = relationship(
+        "UserRole", 
+        foreign_keys="[UserRole.role_id]", 
+        back_populates="role", 
+        cascade="all, delete-orphan",
+        overlaps="users_with_this_role" # ¡Ajustado para el nombre de la relación Many-to-Many!
     )

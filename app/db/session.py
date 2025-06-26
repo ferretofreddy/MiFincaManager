@@ -4,6 +4,13 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from app.core.config import settings # ¡Ahora esto sí funcionará correctamente!
 
+# Asegúrate de que settings se cargue antes de usarlo.
+# Esto es más bien una práctica de asegurar que el módulo settings
+# ya ha sido inicializado con las variables de entorno.
+# En un entorno FastAPI, esto se maneja con la inicialización de la app,
+# pero en un script independiente, a veces es útil forzarlo si no se hace implícitamente.
+_ = settings.DATABASE_URL # Acceder a una propiedad para forzar la carga si no está ya cargada
+
 # Crea el motor de la base de datos asíncrono.
 # Utiliza la URL y las configuraciones del pool de conexiones definidas en settings.
 engine = create_async_engine(
@@ -25,10 +32,12 @@ SessionLocal = async_sessionmaker(
     expire_on_commit=False  # Los objetos no expirarán después de un commit
 )
 
+# Exportamos SessionLocal para que sea usado en los puntos de entrada y dependencias
+async_sessionmaker = SessionLocal # Asumiendo que quieres exportarlo con este nombre también
+
 async def get_db() -> AsyncSession:
     """
     Dependencia de FastAPI para obtener una sesión de base de datos asíncrona.
-    Asegura que la sesión se cierre correctamente después de su uso.
     """
     async with SessionLocal() as session:
         yield session

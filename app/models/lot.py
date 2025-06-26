@@ -26,8 +26,8 @@ class Lot(BaseModel): # Hereda de BaseModel
     is_active = Column(Boolean, default=True) # <-- Aquí se usaba Boolean sin importar
 
     # Relaciones
-    farm: Mapped["Farm"] = relationship(Farm, back_populates="lots")
-    animals: Mapped[List["Animal"]] = relationship(Animal, back_populates="current_lot")
+    farm: Mapped["Farm"] = relationship("Farm", back_populates="lots")
+    animals: Mapped[List["Animal"]] = relationship("Animal", back_populates="current_lot")
 
     # Relación inversa con AnimalLocationHistory
-    location_history_entries: Mapped[List["AnimalLocationHistory"]] = relationship(AnimalLocationHistory, back_populates="lot", cascade="all, delete-orphan")
+    location_history_entries: Mapped[List["AnimalLocationHistory"]] = relationship("AnimalLocationHistory", back_populates="lot", cascade="all, delete-orphan")

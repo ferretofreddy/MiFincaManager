@@ -29,9 +29,9 @@ class ReproductiveEvent(BaseModel): # Hereda de BaseModel
     administered_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     # Relaciones - USANDO REFERENCIAS DE STRING O FORWARDREF
-    animal: Mapped["Animal"] = relationship(Animal, foreign_keys=[animal_id], back_populates="reproductive_events")
-    sire_animal: Mapped[Optional["Animal"]] = relationship(Animal, foreign_keys=[sire_animal_id], back_populates="sire_reproductive_events")
-    administered_by_user: Mapped["User"] = relationship(User, back_populates="reproductive_events_administered")
+    animal: Mapped["Animal"] = relationship("Animal", foreign_keys=[animal_id], back_populates="reproductive_events")
+    sire_animal: Mapped[Optional["Animal"]] = relationship("Animal", foreign_keys=[sire_animal_id], back_populates="sire_reproductive_events")
+    administered_by_user: Mapped["User"] = relationship("User", back_populates="reproductive_events_administered")
     
     # Relación inversa con OffspringBorn (si un evento reproductivo puede resultar en uno o más nacimientos)
-    offspring_born_events: Mapped[List["OffspringBorn"]] = relationship(OffspringBorn, back_populates="reproductive_event", cascade="all, delete-orphan")
+    offspring_born_events: Mapped[List["OffspringBorn"]] = relationship("OffspringBorn", back_populates="reproductive_event", cascade="all, delete-orphan")

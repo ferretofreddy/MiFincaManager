@@ -1,60 +1,117 @@
 # app/models/master_data.py
 import uuid
 from datetime import datetime
-# ¡AÑADE ForeignKey aquí!
-from sqlalchemy import Column, String, Text, Boolean, JSON, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, Mapped
-from typing import List, Optional, Any, Dict, ForwardRef
+from typing import List, ForwardRef, Optional
 
 # Importa BaseModel de nuestro módulo app/db/base.py
 from app.db.base import BaseModel
 
-# Define ForwardRef para los modelos con los que MasterData se relaciona
-# y que pueden causar importación circular.
+# Definiciones de ForwardRef para los modelos con los que MasterData se relaciona
 User = ForwardRef("User")
 Animal = ForwardRef("Animal")
-Grupo = ForwardRef("Grupo")
-Feeding = ForwardRef("Feeding")
 HealthEvent = ForwardRef("HealthEvent")
+Product = ForwardRef("Product")
 Transaction = ForwardRef("Transaction")
 Batch = ForwardRef("Batch")
-Product = ForwardRef("Product")
-# ¡AÑADE ESTA LÍNEA!
-ConfigurationParameter = ForwardRef("ConfigurationParameter")
+Grupo = ForwardRef("Grupo")
+ConfigurationParameter = ForwardRef("ConfigurationParameter") 
 
-
-class MasterData(BaseModel): # Hereda de BaseModel
+class MasterData(BaseModel):
     __tablename__ = "master_data"
-    # id, created_at, updated_at son heredados de BaseModel
 
-    category = Column(String, index=True, nullable=False)
-    name = Column(String, index=True, nullable=False)
-    description = Column(Text)
-    properties = Column(JSON, nullable=True) # Para datos JSONB
-    is_active = Column(Boolean, default=True)
-
-    # Auditoría
+    name = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
-
-    # Relaciones ORM
     created_by_user: Mapped["User"] = relationship("User", back_populates="master_data_created")
 
-    # Relaciones inversas (de MasterData a otros modelos)
+    __table_args__ = (UniqueConstraint('category', 'name', name='unique_master_data_name_per_category'),)
+
+    def __repr__(self):
+        return f"<MasterData(name='{self.name}', category='{self.category}')>"
+
+    # === RELACIONES INVERSAS (back_populates) ===
     animals_species: Mapped[List["Animal"]] = relationship("Animal", foreign_keys="[Animal.species_id]", back_populates="species")
     animals_breed: Mapped[List["Animal"]] = relationship("Animal", foreign_keys="[Animal.breed_id]", back_populates="breed")
-    grupos_purpose: Mapped[List["Grupo"]] = relationship("Grupo", back_populates="purpose")
-    feedings_feed_type: Mapped[List["Feeding"]] = relationship("Feeding", foreign_keys="[Feeding.feed_type_id]", back_populates="feed_type")
-    feedings_unit: Mapped[List["Feeding"]] = relationship("Feeding", foreign_keys="[Feeding.unit_id]", back_populates="unit")
-    health_events_product: Mapped[List["HealthEvent"]] = relationship("HealthEvent", back_populates="product")
-    health_events_unit: Mapped[List["HealthEvent"]] = relationship("HealthEvent", foreign_keys="[HealthEvent.unit_id]", back_populates="unit")
-    transaction_record_type: Mapped[List["Transaction"]] = relationship("Transaction", back_populates="transaction_type")
-    transaction_unit: Mapped[List["Transaction"]] = relationship("Transaction", foreign_keys="[Transaction.unit_id]", back_populates="unit")
-    transaction_currency: Mapped[List["Transaction"]] = relationship("Transaction", foreign_keys="[Transaction.currency_id]", back_populates="currency")
-    batches_batch_type: Mapped[List["Batch"]] = relationship("Batch", back_populates="batch_type")
-    products_as_type: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.product_type_id]", back_populates="product_type")
-    products_as_unit: Mapped[List["Product"]] = relationship("Product", foreign_keys="[Product.unit_id]", back_populates="unit")
-    parameter_data_type: Mapped[List["ConfigurationParameter"]] = relationship(ConfigurationParameter, back_populates="data_type")
 
-    # Asegúrate de que las constraints de unicidad o índices compuestos estén aquí
-    __table_args__ = (UniqueConstraint('category', 'name', name='unique_master_data_name_per_category'),)
+    health_events_event_type: Mapped[List["HealthEvent"]] = relationship(
+        "HealthEvent", 
+        foreign_keys="[HealthEvent.event_type_id]", 
+        back_populates="event_type" 
+    )
+    health_events_as_product: Mapped[List["HealthEvent"]] = relationship(
+        "HealthEvent", 
+        foreign_keys="[HealthEvent.product_id]", 
+        back_populates="product" 
+    )
+    health_events_as_unit: Mapped[List["HealthEvent"]] = relationship(
+        "HealthEvent", 
+        foreign_keys="[HealthEvent.unit_id]", 
+        back_populates="unit" 
+    )
+
+    feedings_feed_type: Mapped[List["Feeding"]] = relationship(
+        "Feeding",
+        foreign_keys="[Feeding.feed_type_id]",
+        back_populates="feed_type"
+    )
+    feedings_unit: Mapped[List["Feeding"]] = relationship(
+        "Feeding",
+        foreign_keys="[Feeding.unit_id]",
+        back_populates="unit"
+    )
+
+    # === ¡AÑADIDAS ESTAS DOS RELACIONES PARA Product.product_type y Product.unit! ===
+    products_as_type: Mapped[List["Product"]] = relationship( # <-- ¡NUEVO NOMBRE que coincide!
+        "Product",
+        foreign_keys="[Product.product_type_id]", # Apunta a la FK correcta
+        back_populates="product_type" # Coincide con la relación en Product
+    )
+    products_as_unit: Mapped[List["Product"]] = relationship( # <-- ¡NUEVO NOMBRE que coincide!
+        "Product",
+        foreign_keys="[Product.unit_id]", # Apunta a la FK correcta
+        back_populates="unit" # Coincide con la relación en Product
+    )
+
+    transactions_transaction_type: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.transaction_type_id]",
+        back_populates="transaction_type"
+    )
+    transactions_entity_type_md: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.entity_type_id]",
+        back_populates="entity_type_md"
+    )
+    transactions_unit: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.unit_id]",
+        back_populates="unit"
+    )
+    transactions_currency: Mapped[List["Transaction"]] = relationship(
+        "Transaction",
+        foreign_keys="[Transaction.currency_id]",
+        back_populates="currency"
+    )
+
+    configuration_parameters_data_type: Mapped[List["ConfigurationParameter"]] = relationship(
+        "ConfigurationParameter",
+        foreign_keys="[ConfigurationParameter.data_type_id]",
+        back_populates="data_type"
+    )
+
+    batches_batch_type: Mapped[List["Batch"]] = relationship(
+        "Batch",
+        foreign_keys="[Batch.batch_type_id]",
+        back_populates="batch_type"
+    )
+
+    grupos_purpose: Mapped[List["Grupo"]] = relationship(
+        "Grupo",
+        foreign_keys="[Grupo.purpose_id]",
+        back_populates="purpose"
+    )
