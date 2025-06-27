@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     configuration_parameters,
     user_farm_access,
     user_roles,
+    lots,
     auth # Router para autenticación y manejo de tokens
 )
 
@@ -79,15 +80,15 @@ app.include_router(farms.router, prefix=API_PREFIX, tags=["Farms"])
 app.include_router(animals.router, prefix=API_PREFIX, tags=["Animals"])
 app.include_router(master_data.router, prefix=API_PREFIX, tags=["Master Data"])
 app.include_router(lots.router, prefix=API_PREFIX, tags=["Lots"])
-app.include_router(grupos.router, prefix=API_PREFIX, tags=["Grupos"])
+app.include_router(grupo.router, prefix=API_PREFIX, tags=["Grupos"])
 app.include_router(animal_group.router, prefix=API_PREFIX, tags=["Animal Groups"])
 app.include_router(animal_location_history.router, prefix=API_PREFIX, tags=["Animal Location History"])
 app.include_router(health_event.router, prefix=API_PREFIX, tags=["Health Events"])
 app.include_router(reproductive_event.router, prefix=API_PREFIX, tags=["Reproductive Events"])
 app.include_router(offspring_born.router, prefix=API_PREFIX, tags=["Offspring Born"])
-app.include_router(weighings.router, prefix=API_PREFIX, tags=["Weighings"])
-app.include_router(feedings.router, prefix=API_PREFIX, tags=["Feedings"])
-app.include_router(transactions.router, prefix=API_PREFIX, tags=["Transactions"])
+app.include_router(weighing.router, prefix=API_PREFIX, tags=["Weighings"])
+app.include_router(feeding.router, prefix=API_PREFIX, tags=["Feedings"])
+app.include_router(transaction.router, prefix=API_PREFIX, tags=["Transactions"])
 app.include_router(batch.router, prefix=API_PREFIX, tags=["Batches"])
 app.include_router(products.router, prefix=API_PREFIX, tags=["Products"])
 app.include_router(roles.router, prefix=API_PREFIX, tags=["Roles"])
