@@ -1,12 +1,12 @@
 # app/crud/user_roles.py 
-from typing import Optional, List, Union, Dict, Any # Añadido Union, Dict, Any
+from typing import Optional, List, Union, Dict, Any 
 import uuid
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy import delete
-from sqlalchemy.exc import IntegrityError as DBIntegrityError # Importa la excepción de integridad de SQLAlchemy
+from sqlalchemy.exc import IntegrityError as DBIntegrityError 
 
 # Importa el modelo UserRole y los esquemas
 from app.models.user_role import UserRole
@@ -42,55 +42,64 @@ class CRUDUserRole:
         )
         return result.scalar_one_or_none()
 
-    async def assign_role_to_user(self, db: AsyncSession, user_id: uuid.UUID, role_id: uuid.UUID, assigned_by_user_id: uuid.UUID) -> UserRole:
+    async def create(self, db: AsyncSession, *, obj_in: UserRoleCreate) -> UserRole:
         """
-        Asigna un rol a un usuario.
-        Verifica si la asociación ya existe antes de crearla.
+        Asigna un rol a un usuario, creando una nueva asociación UserRole.
+        Lanza AlreadyExistsError si la asociación ya existe.
         """
-        # Validar que el user_id, role_id y assigned_by_user_id existen
-        user_exists_q = await db.execute(select(User).filter(User.id == user_id))
-        if not user_exists_q.scalar_one_or_none():
-            raise NotFoundError(f"User with ID {user_id} not found.")
-
-        role_exists_q = await db.execute(select(Role).filter(Role.id == role_id))
-        if not role_exists_q.scalar_one_or_none():
-            raise NotFoundError(f"Role with ID {role_id} not found.")
-        
-        assigned_by_user_exists_q = await db.execute(select(User).filter(User.id == assigned_by_user_id))
-        if not assigned_by_user_exists_q.scalar_one_or_none():
-            raise NotFoundError(f"Assigned by user with ID {assigned_by_user_id} not found.")
-
-        existing_association = await self.get(db, user_id, role_id)
+        # Verificación temprana de existencia para lanzar un error específico
+        existing_association = await self.get(db, user_id=obj_in.user_id, role_id=obj_in.role_id)
         if existing_association:
-            raise AlreadyExistsError(f"Role {role_id} is already assigned to user {user_id}.")
+            raise AlreadyExistsError(f"Role {obj_in.role_id} is already assigned to user {obj_in.user_id}.")
 
+        # Opcional: Validar que user_id, role_id y assigned_by_user_id realmente existen en la DB
+        # Esto ya lo hacemos en el endpoint, así que no es estrictamente necesario aquí si siempre se usa el endpoint
+        # pero es una buena capa de seguridad si el CRUD se llama directamente.
+        
+        # db_user_q = await db.execute(select(User).filter(User.id == obj_in.user_id))
+        # db_user = db_user_q.scalars().first()
+        # if not db_user:
+        #     raise NotFoundError(f"User with ID {obj_in.user_id} not found.")
+
+        # db_role_q = await db.execute(select(Role).filter(Role.id == obj_in.role_id))
+        # db_role = db_role_q.scalars().first()
+        # if not db_role:
+        #     raise NotFoundError(f"Role with ID {obj_in.role_id} not found.")
+
+        # db_assigner_q = await db.execute(select(User).filter(User.id == obj_in.assigned_by_user_id))
+        # db_assigner = db_assigner_q.scalars().first()
+        # if not db_assigner:
+        #     raise NotFoundError(f"Assigning user with ID {obj_in.assigned_by_user_id} not found.")
+
+
+        db_obj = UserRole(
+            user_id=obj_in.user_id,
+            role_id=obj_in.role_id,
+            assigned_by_user_id=obj_in.assigned_by_user_id,
+            assigned_at=datetime.utcnow() # Establecer la fecha de asignación
+        )
         try:
-            # Crea una instancia del modelo UserRole
-            db_obj = self.model(user_id=user_id, role_id=role_id, assigned_by_user_id=assigned_by_user_id)
             db.add(db_obj)
             await db.commit()
-            await db.refresh(db_obj) # Recarga para obtener assigned_at
-
-            # Recargar con relaciones si la respuesta necesita más detalles
-            reloaded_obj = await self.get(db, user_id, role_id)
-            return reloaded_obj if reloaded_obj else db_obj
-
+            await db.refresh(db_obj) # Recargar el objeto para tener las relaciones cargadas
+            return db_obj
         except DBIntegrityError as e:
             await db.rollback()
-            raise AlreadyExistsError(f"Error de integridad al asignar rol {role_id} a usuario {user_id}: {e}") from e
+            # Esta excepción es útil si por alguna razón la verificación previa no bastó (concurrencia)
+            # o si hay una FK que falla.
+            raise AlreadyExistsError(f"Database integrity error: Association already exists or foreign key constraint failed. Detail: {e}")
         except Exception as e:
             await db.rollback()
-            if isinstance(e, (NotFoundError, AlreadyExistsError)):
-                raise e
-            raise CRUDException(f"Error assigning role {role_id} to user {user_id}: {str(e)}") from e
-    
-    async def remove_role_from_user(self, db: AsyncSession, user_id: uuid.UUID, role_id: uuid.UUID):
+            raise CRUDException(f"Error creating UserRole association: {str(e)}") from e
+
+    async def remove_role_from_user(self, db: AsyncSession, *, user_id: uuid.UUID, role_id: uuid.UUID) -> Dict[str, str]:
         """
-        Remueve un rol de un usuario.
+        Elimina una asociación de rol de un usuario.
         """
-        db_obj = await self.get(db, user_id, role_id)
-        if not db_obj:
-            raise NotFoundError(f"Role {role_id} is not assigned to user {user_id}.")
+        # Primero, verifica si la asociación existe
+        existing_association = await self.get(db, user_id=user_id, role_id=role_id)
+        if not existing_association:
+            raise NotFoundError(f"User Role association for User {user_id} and Role {role_id} not found.")
 
         try:
             await db.execute(
@@ -121,7 +130,9 @@ class CRUDUserRole:
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
+        return result.scalars().unique().all()
 
-# Crea una instancia de CRUDUserRole que se puede importar y usar en los routers
-user_role = CRUDUserRole(UserRole)
+# Crea una instancia de la clase CRUDUserRole que se puede importar
+# Esta línea es la que faltaba o estaba comentada.
+user_role = CRUDUserRole(UserRole) 
+

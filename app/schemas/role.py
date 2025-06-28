@@ -37,9 +37,10 @@ class Role(RoleBase):
     updated_at: Optional[datetime] = None
 
     # Relaciones de Pydantic
-    users: List["UserReduced"] = Field(default_factory=list)
+    # === CORRECCIÓN CLAVE AQUÍ: Cambiado 'users' a 'users_with_this_role' ===
+    users_with_this_role: List["UserReduced"] = Field(default_factory=list)
     role_permissions_associations: List["RolePermission"] = Field(default_factory=list)
-    user_roles: List["UserRole"] = Field(default_factory=list)
-
+    user_roles: List["UserRole"] = Field(default_factory=list) # Si esta relación es para la tabla de unión directa
+    
     model_config = ConfigDict(from_attributes=True)
 

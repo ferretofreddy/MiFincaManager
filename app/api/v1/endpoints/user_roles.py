@@ -8,12 +8,13 @@ from app import schemas, models
 from app.crud import user_role as crud_user_role
 from app.crud import user as crud_user
 from app.crud import role as crud_role
+from app.crud.exceptions import AlreadyExistsError, NotFoundError, CRUDException # Importar excepciones CRUD
 
 from app.api import deps
 
 get_db = deps.get_db
-get_current_active_superuser = deps.get_current_active_superuser # Operaciones de asignación de roles suelen ser para superusuarios
-get_current_active_user = deps.get_current_active_user # Para que un usuario consulte sus propios roles
+get_current_active_superuser = deps.get_current_active_superuser 
+get_current_active_user = deps.get_current_active_user 
 
 router = APIRouter(
     prefix="/user_roles",
@@ -25,7 +26,7 @@ router = APIRouter(
 async def assign_role_to_user(
     user_role_in: schemas.UserRoleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_superuser) # Solo superusuarios pueden asignar roles
+    current_user: models.User = Depends(get_current_active_superuser) 
 ) -> Any:
     """
     Asigna un rol a un usuario.
@@ -39,19 +40,40 @@ async def assign_role_to_user(
     db_role = await crud_role.get(db, id=user_role_in.role_id)
     if not db_role:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
+    
+    # Asegurar que el assigned_by_user_id sea el del usuario actual si no se provee,
+    # o validar que el usuario actual tenga permiso para asignar en nombre de otro
+    # (por simplicidad, asumimos que current_user.id es quien asigna)
+    user_role_in.assigned_by_user_id = current_user.id # Sobrescribir para asegurar consistencia
 
     try:
-        # El CRUD de UserRole ya debería manejar la verificación de existencia
-        user_role = await crud_user_role.create(db, obj_in=user_role_in, assigned_by_user_id=current_user.id)
+        user_role = await crud_user_role.create(db, obj_in=user_role_in)
         return user_role
+    except AlreadyExistsError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e)
+        )
+    except NotFoundError as e: 
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except CRUDException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=f"Error al asignar rol: {str(e)}"
+        )
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Association already exists or another error: {e}")
+        # Para cualquier otro error inesperado, devuelve un 500
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Internal server error: {e}")
+
 
 @router.get("/user/{user_id}/roles", response_model=List[schemas.UserRole])
 async def get_roles_for_user(
     user_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user) # Usuarios pueden ver sus propios roles; superusuarios, cualquier rol
+    current_user: models.User = Depends(get_current_active_user) 
 ) -> List[schemas.UserRole]:
     """
     Obtiene todos los roles asignados a un usuario específico.
@@ -74,19 +96,18 @@ async def remove_role_from_user(
     user_id: uuid.UUID,
     role_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_superuser) # Solo superusuarios pueden remover roles
+    current_user: models.User = Depends(get_current_active_superuser) 
 ) -> Response:
     """
     Remueve un rol de un usuario.
     Requiere autenticación de superusuario.
     """
-    # Validar que la asociación exista antes de intentar eliminar
     db_association = await crud_user_role.get(db, user_id=user_id, role_id=role_id)
     if not db_association:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User-Role association not found.")
 
     try:
-        await crud_user_role.remove(db, user_id=user_id, role_id=role_id)
+        await crud_user_role.remove_role_from_user(db, user_id=user_id, role_id=role_id) # Usar el nombre de método correcto
         return Response(status_code=status.HTTP_204_NO_CONTENT)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error removing association: {e}")
